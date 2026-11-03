@@ -51,7 +51,15 @@ function fit() {
   cv.style.transform = portrait ? 'rotate(90deg)' : '';
   cv.width = Math.max(240, Math.min(1920, Math.round(cw * dpr))); cv.height = Math.round(cv.width * H / VW);
 }
-addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 120)); fit();
+// iPhone Safari can report the old size for a moment after a turn, so refit on every signal and again a few times while it settles.
+let fitTimers = [];
+function refit() { fit(); fitTimers.forEach(clearTimeout); fitTimers = [100, 300, 700, 1500].map(ms => setTimeout(fit, ms)); }
+addEventListener('resize', refit); addEventListener('orientationchange', refit); addEventListener('pageshow', refit);
+if (window.visualViewport) visualViewport.addEventListener('resize', refit);
+if (window.ResizeObserver) new ResizeObserver(fit).observe(sa);
+let lastBox = '';   // safety net for browsers that skip the events above: refit whenever the safe area's size changes
+setInterval(() => { const R = sa.getBoundingClientRect(), k = Math.round(R.width) + 'x' + Math.round(R.height); if (k !== lastBox) { lastBox = k; fit(); } }, 400);
+fit();
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
