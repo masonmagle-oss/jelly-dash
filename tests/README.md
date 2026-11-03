@@ -17,10 +17,14 @@ Add `test('name', () => { ... })` in `tests/suite.js`; throw (or use `ok` / `eq`
 
 ## Layout of the code
 `js/*.js` are classic scripts sharing one global scope, loaded in the order listed in `index.html`:
-core → save → themes → levels → audio → music → softbody → game → room → solver → editor → update → render → ui → input → main.
+core → save → themes → levels → audio → music → tunes → softbody → game → room → solver → editor → update → render → ui → input → main.
 
 ## Audio checks
 `tests.html` renders every song and effect offline and measures them with `tests/dsp.js` (FFT, band energy, stereo width, beat strength):
 songs must be audible, within a loudness band, bright enough for a phone speaker (spectral centroid, energy above 2.5 kHz, little below 90 Hz), have a clear pulse and
 stereo width; every effect must have an entry in `SFX_TARGET` (js/audio.js) and land within 3 dB of it; menu effects must be dry. After changing any effect run
 `node tests/calibrate.js` and paste the table it prints over `SFX_TRIM`.
+
+## Tunes
+`js/tunes.js` holds one public-domain melody per world (`TUNES`, `WORLD_TUNE`). A PERFECT or GREAT jump plays the next note. The suite checks every tune's shape, that its notes land in a
+comfortable range over every song style, and that it makes sound. Only add compositions that are in the public domain.

@@ -185,6 +185,7 @@ function songUpdate(prog) {
 // player notes: always in the song's key and voice, snapped to the next 16th if it is close (otherwise instant so it never feels laggy)
 function beatNote(vol, up) {
   if (!AC || simming) return;
+  if (curTune && song && up === 0) return;   // in a world with a tune, jumps are voiced by the tune (tunes.js), not by a random scale note
   if (!song) { const n = PENT[Math.floor(Math.random() * PENT.length)]; tone(mf(n), 1.0, { vol, att: .004 }); return; }
   const six = 60 / song.bpm / 4, d0 = Math.ceil(songT / six - 1e-6) * six - songT, d = d0 < .06 ? d0 : 0, c = song.cfg, n = c.scale.length;
   song.walk = clamp(song.walk + Math.floor(Math.random() * 5) - 2, 0, 2 * n - 1);

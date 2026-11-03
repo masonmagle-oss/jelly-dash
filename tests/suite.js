@@ -112,6 +112,25 @@
       ok(pdb >= J.SFX_TARGET[k] - 3.2 || hdb >= J.SFX_HF_CEIL - 1.5, k + ' is ' + pdb.toFixed(1) + ' dBFS, well under its target ' + J.SFX_TARGET[k] + ' (re-run the calibration)');
     }
   }, { slow: true });
+  test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
+    eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
+    for (const w of WORLD_TUNE) ok(TUNES[w], 'world points at a missing tune');
+    for (const t of TUNES) {
+      ok(t.name && t.by && /1[78]\d\d/.test(t.by), t.id + ' needs a name and a composer with a (public-domain) year'); ok(t.notes.length >= 24 && t.notes.length <= 80, t.id + ' length ' + t.notes.length);
+      ok(t.notes.every(n => Number.isInteger(n)), t.id + ' notes must be whole semitones'); ok(Math.max(...t.notes) - Math.min(...t.notes) <= 24, t.id + ' spans more than two octaves');
+      for (let si = 0; si < J.SONG_N; si++) { const c = J.styleCfg(si); for (let i = 0; i < t.notes.length; i++) { const m = tuneMidi(t, c, i); ok(m >= 46 && m <= 86, t.id + ' note ' + i + ' lands at MIDI ' + m + ' in ' + c.name + ' (too low or too piercing)'); } }
+    }
+    const saveT = curTune, saveI = tuneI, saveC = combo;
+    try {
+      for (const t of TUNES) {
+        curTune = t; tuneI = 0; combo = 0; const buf = await J.renderSfxOffline(() => { tuneNote('PERFECT', J.styleCfg(2)); }, 1.5), d = buf.getChannelData(0); let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
+        ok(pk > .003, t.id + ' first note is silent'); eq(tuneI, 1, 'a note advances the tune');
+      }
+      curTune = TUNES[0]; tuneI = TUNES[0].notes.length - 1; ok(tuneNote('GREAT', J.styleCfg(2)) === true && tuneI === 0, 'finishing the tune wraps it round and says so');
+      await J.startLevel(J.OFFICIAL[0], 'dash', false); eq(curTune, TUNES[WORLD_TUNE[J.OFFICIAL[0].world]], 'a level plays its world tune'); eq(tuneI, 0);
+      J.setState('title');
+    } finally { curTune = saveT; tuneI = saveI; combo = saveC; }
+  }, { slow: true });
   test('brightness cap: a high note is much quieter than the same note an octave and a half lower', async () => {
     const lvl = async f => { const buf = await J.renderSfxOffline(() => tone(f, .3, { vol: .1, att: .005 }), 1); let m = 0; for (const x of buf.getChannelData(0)) m = Math.max(m, Math.abs(x)); return 20 * Math.log10(m + 1e-12); };
     const lo = await lvl(700), hi = await lvl(4200); ok(lo - hi >= 8, 'a 4.2 kHz note is only ' + (lo - hi).toFixed(1) + ' dB quieter than a 700 Hz one (the cap should take off 8 dB or more)');

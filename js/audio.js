@@ -53,7 +53,7 @@ const nowT = () => (clockOverride ? clockOverride() : AC.currentTime);
 let audioSwapped = false, audioOpen = false;   // audioSwapped: a throwaway graph is live, so the game loop must not touch songs or ambience. audioOpen: the render helper is scheduling right now; any other sound (the title mascot hopping, say) is dropped
 async function withAudioContext(ctx, fn) {
   const keep = { AC, master, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb };
-  AC = null; song = null; amb = null; audioSwapped = true; initAudio(ctx);
+  AC = null; song = null; songBus = null; amb = null; audioSwapped = true; initAudio(ctx);
   try { return await fn(); } finally { audioSwapped = false; audioOpen = false; clockOverride = null; ({ AC, master, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb } = keep); }
 }
 function tone(f, d, o = {}) {
