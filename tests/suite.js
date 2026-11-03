@@ -85,24 +85,64 @@
     const want = {}; for (const st of ['title', 'select', 'settings', 'room']) { J.setState(st); want[st] = J.menuWanted(); } await toTitle();
     eq(want, { title: 'title', select: 'select', settings: 'select', room: 'room' });
   });
+  // every song is rendered offline and measured: is it audible, clean, bright enough for a phone speaker, and does it have a pulse you can jump to?
   for (let i = 0; ; i++) {
     if (i >= J.STYLES.length) break;
-    test(`music renders audible, clean audio: ${J.STYLES[i].name}`, async () => {
-      const buf = await J.renderSongOffline({ id: 't' + i, name: 't', style: i, bpm: J.STYLES[i].bpm, menu: true }, 9, 1);
-      const d = buf.getChannelData(0); let sum = 0, peak = 0, bad = 0; for (let k = 0; k < d.length; k++) { const v = d[k]; if (!Number.isFinite(v)) bad++; else { sum += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); } }
-      const rms = Math.sqrt(sum / d.length), db = 20 * Math.log10(rms); eq(bad, 0, 'non-finite samples'); ok(db > -40 && db < -27, 'loudness ' + db.toFixed(1) + ' dB is outside the -40..-27 dB band every song must sit in (add a gain: trim)'); ok(peak > .04, 'no body (peak ' + peak.toFixed(3) + ')'); ok(peak <= 1.0001, 'clips (peak ' + peak.toFixed(3) + ')');
+    test(`music is audible, clean, bright and has a pulse: ${J.STYLES[i].name}`, async () => {
+      const st = J.STYLES[i], buf = await J.renderSongOffline({ id: 't' + i, name: 't', style: i, bpm: st.bpm, menu: true }, 16, 1);
+      const L = buf.getChannelData(0), R = buf.getChannelData(1), A = DSP.analyse(L, R, buf.sampleRate, st.bpm), hi = A.bandPct['pres2.5-6k'] + A.bandPct['air6k+'];
+      eq(A.nan, 0, 'non-finite samples'); ok(A.peakDb <= -6, 'peak ' + A.peakDb + ' dB leaves no headroom'); ok(A.rmsDb > -38 && A.rmsDb < -26, 'loudness ' + A.rmsDb + ' dB is outside the -38..-26 band every song must sit in (add a gain: trim)');
+      ok(A.centroid >= 1500, 'dull: spectral centroid ' + A.centroid + ' Hz (want >= 1500; brighten the lead/hats)'); ok(hi >= 1.5, 'too little above 2.5 kHz (' + hi.toFixed(1) + '%): it will disappear on a phone speaker');
+      ok(A.bandPct['sub<90'] <= 28, 'too much below 90 Hz (' + A.bandPct['sub<90'] + '%): phones cannot play it'); ok(A.beatAC >= .2, 'weak pulse (beat clarity ' + A.beatAC + '): add hats, shaker or a pulse: [0, 4, 8, 12] tick');
     }, { slow: true });
   }
-  test('sound effects: every effect makes a finite, audible sound', async () => {
+  test('music has stereo width: the melody sits left and right, not in the middle', async () => {
+    const buf = await J.renderSongOffline({ id: 'w', name: 'w', style: 2, bpm: J.STYLES[2].bpm, menu: true }, 12, 1), A = DSP.analyse(buf.getChannelData(0), buf.getChannelData(1), buf.sampleRate, 108);
+    ok(A.corrHi < .97, 'L/R correlation above 500 Hz is ' + A.corrHi + ' (that is mono)');
+  }, { slow: true });
+  test('sound effects: every effect is calibrated, finite and lands on its target level', async () => {
     const args = { squish: [600, 'jelly'], bloop: [0], toggle: [true], panel: [true], tick: [.5], star: [1], combo: [3], land: [600] };
-    const names = Object.keys(J.sfx).filter(k => !['die', 'win'].includes(k)); ok(names.length >= 24, 'a full set of effects (' + names.length + ')');
+    const names = Object.keys(J.sfx).filter(k => k !== 'heart'); ok(names.length >= 24, 'a full set of effects (' + names.length + ')');
     for (const k of names) {
-      const buf = await J.renderSfxOffline(() => J.sfx[k](...(args[k] || [])), 2); const d = buf.getChannelData(0); let peak = 0, bad = 0; for (let i = 0; i < d.length; i++) { if (!Number.isFinite(d[i])) bad++; else if (Math.abs(d[i]) > peak) peak = Math.abs(d[i]); }
-      eq(bad, 0, k + ' non-finite'); ok(peak > 1e-4, k + ' is silent'); ok(peak <= 1.0001, k + ' clips');
+      ok(Number.isFinite(J.SFX_TARGET[k]), k + ' has no entry in SFX_TARGET: add one, then run tests/calibrate and paste the new SFX_TRIM');
+      let peak = 0, hf = 0; for (let rep = 0; rep < 3; rep++) { const buf = await J.renderSfxOffline(() => J.sfx[k](...(args[k] || [])), 2); for (const c of [0, 1]) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { ok(Number.isFinite(d[i]), k + ' non-finite'); if (Math.abs(d[i]) > peak) peak = Math.abs(d[i]); } hf = Math.max(hf, DSP.highPeak(d, buf.sampleRate)); } }
+      const pdb = 20 * Math.log10(peak + 1e-12), hdb = 20 * Math.log10(hf + 1e-12);
+      ok(pdb <= J.SFX_TARGET[k] + 3.2, k + ' peaks at ' + pdb.toFixed(1) + ' dBFS, target ' + J.SFX_TARGET[k] + ' (re-run the calibration)');
+      ok(hdb <= J.SFX_HF_CEIL + 1.5, k + ' is too harsh: its part above 2 kHz peaks at ' + hdb.toFixed(1) + ' dBFS (limit ' + J.SFX_HF_CEIL + '); lower its notes or re-run the calibration');
+      ok(pdb >= J.SFX_TARGET[k] - 3.2 || hdb >= J.SFX_HF_CEIL - 1.5, k + ' is ' + pdb.toFixed(1) + ' dBFS, well under its target ' + J.SFX_TARGET[k] + ' (re-run the calibration)');
+    }
+  }, { slow: true });
+  test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
+    eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
+    for (const w of WORLD_TUNE) ok(TUNES[w], 'world points at a missing tune');
+    for (const t of TUNES) {
+      ok(t.name && t.by && /1[78]\d\d/.test(t.by), t.id + ' needs a name and a composer with a (public-domain) year'); ok(t.notes.length >= 24 && t.notes.length <= 80, t.id + ' length ' + t.notes.length);
+      ok(t.notes.every(n => Number.isInteger(n)), t.id + ' notes must be whole semitones'); ok(Math.max(...t.notes) - Math.min(...t.notes) <= 24, t.id + ' spans more than two octaves');
+      for (let si = 0; si < J.SONG_N; si++) { const c = J.styleCfg(si); for (let i = 0; i < t.notes.length; i++) { const m = tuneMidi(t, c, i); ok(m >= 46 && m <= 86, t.id + ' note ' + i + ' lands at MIDI ' + m + ' in ' + c.name + ' (too low or too piercing)'); } }
+    }
+    const saveT = curTune, saveI = tuneI, saveC = combo;
+    try {
+      for (const t of TUNES) {
+        curTune = t; tuneI = 0; combo = 0; const buf = await J.renderSfxOffline(() => { tuneNote('PERFECT', J.styleCfg(2)); }, 1.5), d = buf.getChannelData(0); let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
+        ok(pk > .003, t.id + ' first note is silent'); eq(tuneI, 1, 'a note advances the tune');
+      }
+      curTune = TUNES[0]; tuneI = TUNES[0].notes.length - 1; ok(tuneNote('GREAT', J.styleCfg(2)) === true && tuneI === 0, 'finishing the tune wraps it round and says so');
+      await J.startLevel(J.OFFICIAL[0], 'dash', false); eq(curTune, TUNES[WORLD_TUNE[J.OFFICIAL[0].world]], 'a level plays its world tune'); eq(tuneI, 0);
+      J.setState('title');
+    } finally { curTune = saveT; tuneI = saveI; combo = saveC; }
+  }, { slow: true });
+  test('brightness cap: a high note is much quieter than the same note an octave and a half lower', async () => {
+    const lvl = async f => { const buf = await J.renderSfxOffline(() => tone(f, .3, { vol: .1, att: .005 }), 1); let m = 0; for (const x of buf.getChannelData(0)) m = Math.max(m, Math.abs(x)); return 20 * Math.log10(m + 1e-12); };
+    const lo = await lvl(700), hi = await lvl(4200); ok(lo - hi >= 8, 'a 4.2 kHz note is only ' + (lo - hi).toFixed(1) + ' dB quieter than a 700 Hz one (the cap should take off 8 dB or more)');
+  });
+  test('menu sounds are dry: no reverb tail smearing rapid taps', async () => {
+    for (const k of J.UI_SFX) {
+      const buf = await J.renderSfxOffline(() => J.sfx[k](...(k === 'toggle' || k === 'panel' ? [true] : k === 'tick' ? [.5] : k === 'combo' ? [3] : [])), 2.5), d = buf.getChannelData(0), from = Math.round(buf.sampleRate * 1.0); let sum = 0; for (let i = from; i < d.length; i++) sum += d[i] * d[i];
+      ok(20 * Math.log10(Math.sqrt(sum / (d.length - from)) + 1e-12) < -62, k + ' is still ringing after 1 s');
     }
   }, { slow: true });
   test('hazard hit sounds and world ambience events run', async () => {
-    for (const h of J.HAZ) { const buf = await J.renderSfxOffline(() => h.hit(), 1.5); ok(buf.getChannelData(0).some(v => Math.abs(v) > 1e-4), h.id + ' hit is silent'); }
+    for (const h of J.HAZ) { const buf = await J.renderSfxOffline(() => J.playHit(h), 1.5); ok(buf.getChannelData(0).some(v => Math.abs(v) > 1e-4), h.id + ' hit is silent'); ok(Number.isFinite(J.SFX_TARGET['hit:' + h.id]), h.id + ' hit needs an SFX_TARGET entry'); }
     for (const [k, a] of Object.entries(J.AMB)) { for (let i = 0; i < 30; i++) { const w = a.evt(); ok(Number.isFinite(w) && w > 0, k + ' event wait'); } ok(a.bed.length >= 1, k + ' bed'); }
     for (const w of J.WORLDS) ok(J.AMB[w.amb], 'ambience for ' + w.id);
   }, { slow: true });
