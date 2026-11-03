@@ -28,3 +28,6 @@ stereo width; every effect must have an entry in `SFX_TARGET` (js/audio.js) and 
 ## Tunes
 `js/tunes.js` holds one public-domain melody per world (`TUNES`, `WORLD_TUNE`). A PERFECT or GREAT jump plays the next note. The suite checks every tune's shape, that its notes land in a
 comfortable range over every song style, and that it makes sound. Only add compositions that are in the public domain.
+
+## Jukebox
+Tunes carry on from run to run (`store.tunes[id] = { n, pos }`); playing one through collects it, and the Jukebox screen (`drawJukebox` in js/ui.js, playback in js/tunes.js) lists them and plays the collected ones. The suite checks saving, collecting, touch targets and playback start/stop.
