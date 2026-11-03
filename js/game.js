@@ -141,7 +141,7 @@ function die() {
   if (simming) { state = 'dead'; return; }
   if (mode === 'zen') { zenRespawn(); return; }
   if (mode === 'practice') { practiceRespawn(); return; }
-  state = 'dead'; deadT = 0; shake = reduceMotion() ? 0 : .4; curHaz().hit(); lastPct = pct(); setHum(0); humOn = 0; songStop(); combo = 0;
+  state = 'dead'; deadT = 0; shake = reduceMotion() ? 0 : .4; playHit(curHaz()); lastPct = pct(); setHum(0); humOn = 0; songStop(); combo = 0;
   if (!testing && lastPct > (store.best[curLevel.id] || 0)) { if (mode === 'dash' && (store.best[curLevel.id] || 0) > 0) { say('New best: ' + lastPct + '%', 2.4); setTimeout(() => sfx.newBest(), 380); } store.best[curLevel.id] = lastPct; persist(); }
   const bb = jelly.bounds(), hzCol = curHaz().col;
   for (let i = 0; i < 34; i++) {

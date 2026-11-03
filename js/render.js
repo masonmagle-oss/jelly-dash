@@ -200,7 +200,7 @@ function paintSlime(x, th) {
 const HAZ = [
   { id: 'gumdrop', name: 'Gumdrop', need: 0, paint: paintGumdrop, hb: HB_DEF, col: ['#c86bff', '#ffb3f0', '#ff8fd8', '#fff'],
     idle: (t, bp) => ({ sy: 1 + .06 * bp, sx: 1 - .03 * bp }),
-    hit: () => { tone(260, .28, { to: 120, vol: .1 }); noiseHit({ f0: 900, f1: 300, q: 3, d: .22, vol: .12 }); tone(mf(79), .5, { vol: .03, at: .05 }); } },
+    hit: () => { tone(260, .28, { to: 120, vol: .08 }); tone(560, .2, { to: 300, vol: .05, type: 'triangle' }); noiseHit({ f0: 900, f1: 300, q: 3, d: .22, vol: .12 }); tone(mf(79), .5, { vol: .03, at: .05 }); } },
   { id: 'taffy', name: 'Taffy Hill', need: 1, paint: paintTaffy, hb: { x: 19, h: 12 }, note: 'forgiving', info: '~20% wider jump window', col: ['#ff8fc7', '#fff', C.blush, '#ff5fa8'],
     idle: t => ({ rot: Math.sin(t * 2.2) * .06, sx: 1 + .05 * Math.sin(t * 3.1), sy: 1 - .04 * Math.sin(t * 3.1) }),
     hit: () => { tone(520, .5, { to: 140, vol: .09, type: 'triangle' }); tone(140, .35, { to: 300, vol: .06, at: .25 }); noiseHit({ f0: 1200, f1: 500, q: 2, d: .3, vol: .07 }); } },
@@ -212,7 +212,7 @@ const HAZ = [
     hit: () => { noiseHit({ f0: 700, f1: 250, q: .7, d: .45, vol: .09 }); tone(330, .5, { to: 220, vol: .05, type: 'triangle', att: .05 }); tone(mf(72), 1, { vol: .025, att: .08, at: .05 }); } },
   { id: 'slime', name: 'Slime Patch', need: 6, paint: paintSlime, hb: HB_DEF, col: ['#6fe8a8', '#d9ffe6', '#2fc77f', '#fff'],
     idle: (t, bp) => { const y = 1 + .08 * Math.sin(t * 4) + .05 * bp; return { sy: y, sx: 1 / Math.sqrt(y) }; },
-    hit: () => { noiseHit({ f0: 800, f1: 180, q: 2.4, d: .35, vol: .16 }); tone(130, .3, { to: 55, vol: .1 }); noiseHit({ f0: 1600, f1: 700, q: 3, d: .1, vol: .06, at: .12 }); } },
+    hit: () => { noiseHit({ f0: 800, f1: 180, q: 2.4, d: .35, vol: .16 }); tone(130, .3, { to: 55, vol: .06 }); tone(300, .22, { to: 120, vol: .06, type: 'triangle' }); noiseHit({ f0: 1600, f1: 700, q: 3, d: .1, vol: .06, at: .12 }); } },
 ];
 const hazOpen = i => doneCount() >= HAZ[i].need;
 const curHaz = () => { const i = store.haz | 0; return HAZ[i] && hazOpen(i) ? HAZ[i] : HAZ[0]; };
