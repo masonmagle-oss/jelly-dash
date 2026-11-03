@@ -15,6 +15,9 @@ const TUNES = [
 ];
 const WORLD_TUNE = [0, 1, 2, 3, 4];   // WORLDS index -> TUNES index
 let curTune = null, tuneI = 0, tuneAnnounced = false;
+const tuneRec = t => store.tunes[t.id] || (store.tunes[t.id] = { n: 0, pos: 0 });   // saved progress for a tune
+const tuneSave = () => { if (curTune) { tuneRec(curTune).pos = tuneI; persist(); } };   // called when a run ends, so the next one carries on
+const tunesCollected = () => TUNES.filter(t => (store.tunes[t.id] || {}).n > 0).length;
 const tuneFor = L => (L && L.world != null && TUNES[WORLD_TUNE[L.world]]) || null;   // custom levels have no world, so no tune
 const median = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
 // The MIDI note for step i of a tune over a song style: matched to its major / minor feel and moved to the octave where the melody sits comfortably.
@@ -30,8 +33,12 @@ function tuneNote(grade, cfg) {
   if (combo >= 8) VOICES.bell(mf(m + 12), .6, v * .22, 0, 'song', .3);
   if (combo >= 16) VOICES.bell(mf(m + 7), .6, v * .16, 0, 'song', -.3);
   if (!tuneAnnounced) { tuneAnnounced = true; say('♪ ' + t.name, 2.5); }
-  tuneI++; const done = tuneI >= t.notes.length; if (done) tuneI = 0;
-  if (done) { say('♪ ' + t.name + ' — complete!', 3); [0, 4, 7, 12].forEach((d, k) => VOICES.bell(mf(m + 12 + d), .9, .05, .08 * k, 'song')); }
+  tuneI++; const done = tuneI >= t.notes.length, rec = tuneRec(t); if (done) tuneI = 0; rec.pos = tuneI;
+  if (done) {
+    rec.n++; persist();
+    say(rec.n === 1 ? '♪ Tune collected: ' + t.name + '! Hear it in the Jukebox' : '♪ ' + t.name + ' — played through again!', 3.5);
+    [0, 4, 7, 12].forEach((d, k) => VOICES.bell(mf(m + 12 + d), .9, .05, .08 * k, 'song'));
+  }
   return done;
 }
 // The victory fanfare for a three-star run: the opening of the world's tune.
@@ -41,3 +48,28 @@ function tuneFanfare(cfg) {
   for (let i = 0; i < 12; i++) voice(mf(tuneMidi(t, cfg, i)), .6, .06, i * .15, 'sfx');
   return true;
 }
+
+/* ================= Jukebox playback =================
+   A collected tune can be played from the Jukebox screen (ui.js, drawJukebox) over the backing song of its world. Notes are scheduled just ahead of the
+   audio clock, one per beat, so stopping is instant (nothing is queued far in the future). */
+let jukeI = -1, jukeStart = 0, jukeNext = 0, jukeStep = .6, jukeCfg = null;
+const jukeWorldStyle = ti => { const w = WORLD_TUNE.indexOf(ti), L = OFFICIAL.find(l => l.world === w); return L ? L.style : 1; };
+function jukePlay(ti) {
+  jukeStop(); initAudio(); if (!AC || simming) return false;
+  const st = jukeWorldStyle(ti); songStart({ id: 'juke-' + TUNES[ti].id, name: 'juke', style: st, bpm: STYLES[st].bpm, menu: true }, 0);
+  if (!song) return false;
+  song.noLead = true; jukeI = ti; jukeCfg = styleCfg(st); jukeStep = 60 / STYLES[st].bpm; jukeStart = AC.currentTime + 2 * jukeStep; jukeNext = 0; menuKey = 'juke';
+  return true;
+}
+function jukeStop() { if (jukeI < 0) return; jukeI = -1; songStop(); menuKey = null; }
+// called every frame while a tune plays: schedules the notes that fall in the next fraction of a second; returns false once the tune has ended
+function jukeTick() {
+  if (jukeI < 0 || !AC || !song) return false;
+  const t = TUNES[jukeI], voice = VOICES[jukeCfg.lead.voice] || VOICES.tri;
+  while (jukeNext < t.notes.length && jukeStart + jukeNext * jukeStep < AC.currentTime + .35) {
+    const at = Math.max(0, jukeStart + jukeNext * jukeStep - AC.currentTime), m = tuneMidi(t, jukeCfg, jukeNext);
+    voice(mf(m), jukeStep * 1.15, .1, at, 'song'); VOICES.bell(mf(m + 12), jukeStep * .8, .022, at, 'song', .3); jukeNext++;
+  }
+  return AC.currentTime < jukeStart + (t.notes.length + 1) * jukeStep;
+}
+const jukeProgress = () => jukeI < 0 || !AC ? 0 : clamp((AC.currentTime - jukeStart) / (TUNES[jukeI].notes.length * jukeStep), 0, 1);

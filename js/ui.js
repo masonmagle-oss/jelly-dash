@@ -30,6 +30,7 @@ function drawTitle() {
     ['Squish Studio', 'knead shapes, build a song', () => startStudio()], ['Level Creator', 'build, test & share your own', () => { pickFor = 'edit'; state = 'select'; }]];
   items.forEach((m, i) => btn(m[0], W / 2 - 340 + (i % 2) * 350, 150 + Math.floor(i / 2) * 98, 330, 86, () => { initAudio(); sfx.click(); m[2](); }, { sub: m[1], size: 24, ssize: 14 }));   // two columns of big buttons: finger-sized on a phone
   btn('⚙ Settings', W - 148, 14, 132, 40, () => { sfx.click(); state = 'settings'; }, { size: 17, r: 16 });
+  btn('♪ Jukebox', W - 300, 14, 140, 40, () => { sfx.click(); state = 'jukebox'; }, { size: 17, r: 16, sub: tunesCollected() + ' / ' + TUNES.length, ssize: 11 });
   txt(isTouchUi() ? 'tap to choose  •  headphones recommended' : '1-6 to choose  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
 }
 let dailyL = null;
@@ -205,6 +206,27 @@ function drawSettings() {
   btn('How to play', 520, y0 + 14 + step * 4, 400, 46, () => { sfx.panel(true); showInfo('How to play', HOW_TO); }, { size: 19 });
   btn('Privacy', 520, y0 + 14 + step * 5, 400, 46, () => { sfx.panel(true); showInfo('Privacy', PRIVACY); }, { size: 19 });
   btn('‹ Back', 24, 478, 120, 44, () => { sfx.back(); toTitle(); }, { size: 20 });
+}
+/* ---------- the Jukebox: the tunes you have collected ---------- */
+function drawJukebox() {
+  drawBg(tg * 25, theme(.5 + Math.sin(tg * .25) * .3, [1, 3, 4]));
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(-VX, 0, VW, H);
+  txt('Jukebox', W / 2, 40, 38, C.pink, '#fff');
+  txt(tunesCollected() + ' of ' + TUNES.length + ' tunes collected  •  land PERFECT or GREAT jumps to play a world\'s tune', W / 2, 78, TS.small, C.plum, '#fff');
+  const x = 24, w = W - 48, h = 64, gap = 10, y0 = 98;
+  TUNES.forEach((t, i) => {
+    const rec = store.tunes[t.id] || { n: 0, pos: 0 }, got = rec.n > 0, w0 = WORLD_TUNE.indexOf(i), playing = jukeI === i, y = y0 + i * (h + gap);
+    const sub = got ? t.by + '  •  World ' + (w0 + 1) + ', ' + WORLDS[w0].name + (rec.n > 1 ? '  •  played through ' + rec.n + '×' : '')
+      : 'World ' + (w0 + 1) + ', ' + WORLDS[w0].name + '  •  ' + rec.pos + ' / ' + t.notes.length + ' notes found';
+    btn((playing ? '■  ' : got ? '▶  ' : '♪  ') + (got ? t.name : '? ? ?'), x, y, w, h, () => {
+      if (!got) { sfx.error(); say('Land PERFECT and GREAT jumps in ' + WORLDS[w0].name + ' to play ' + t.notes.length + ' notes', 3.5); return; }
+      if (playing) { sfx.back(); jukeStop(); } else { sfx.click(); jukePlay(i); }
+    }, { sub, size: 24, ssize: 15, on: playing, col: got ? C.pink : C.mauve });
+    const bx = x + w - 176, by = y + h / 2 - 6, f = playing ? jukeProgress() : got ? 1 : rec.pos / t.notes.length;   // progress: found so far, or how far the tune has played
+    ctx.fillStyle = 'rgba(200,160,200,.35)'; rr(bx, by, 150, 12, 6); ctx.fill();
+    if (f > .01) { ctx.fillStyle = got ? C.gold : C.pink; rr(bx, by, Math.max(12, 150 * f), 12, 6); ctx.fill(); }
+  });
+  btn('‹ Back', 24, 478, 120, 44, () => { sfx.back(); jukeStop(); toTitle(); }, { size: 20 });
 }
 const HOW_TO = [
   'Tap anywhere (or press Space) to jump. The jelly runs by itself; you only choose when to hop.',
@@ -483,6 +505,7 @@ function draw() {
   if (state === 'room') { ctx.save(); drawRoom(); ctx.restore(); overlays(); return; }
   if (state === 'select') { drawSelect(); overlays(); return; }
   if (state === 'settings') { drawSettings(); overlays(); return; }
+  if (state === 'jukebox') { drawJukebox(); overlays(); return; }
   if (state === 'edit') { ui = prevUi; ui = []; drawEditor(); overlays(); return; }
   if (state === 'solving') { drawSolving(); return; }
   const scroll = P.wx - (state === 'title' ? 64 : PX), th = theme(clamp(P.wx / FINISH, 0, 1), curLevel.pal);

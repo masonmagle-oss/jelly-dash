@@ -64,7 +64,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (state === 'solving') { if (e.code === 'Escape') cancelSolve(); return; }   // (also cancels the daily level's cooking)
-  if (state === 'select' || state === 'settings') { if (e.code === 'Escape') toTitle(); return; }
+  if (state === 'select' || state === 'settings' || state === 'jukebox') { if (e.code === 'Escape') toTitle(); return; }
   if (state === 'edit') {
     if (e.code === 'Escape') { if (edMore) edMore = false; else toTitle(); return; }
     if (e.code === 'ArrowRight' || e.code === 'KeyD') edScroll = Math.min(Math.max(0, edLevel.len - 20), edScroll + 1);
@@ -103,7 +103,7 @@ const ghostTap = () => ghostMs > 0 && state !== 'play' && state !== 'dead' && st
 const touchPtrs = new Map(); let edPan = null, panMid = null;
 const pressUi = () => { const b = hitUi(); if (b) b.fn(); };
 const SCREENS = {
-  title: { down: pressUi }, select: { down: pressUi }, solving: { down: pressUi },
+  title: { down: pressUi }, select: { down: pressUi }, jukebox: { down: pressUi }, solving: { down: pressUi },
   settings: {
     down() { const b = hitUi(); if (!b) return; if (b.slider) { dragSlider = b.slider; sliderTo(mouse.x); } else b.fn(); },
     move() { if (dragSlider) sliderTo(mouse.x); },
@@ -152,7 +152,7 @@ cv.addEventListener('pointerdown', e => {
 addEventListener('pointermove', e => {
   [mouse.x, mouse.y] = pmap(e); { const tp = touchPtrs.get(e.pointerId); if (tp) tp.x = mouse.x; }
   const sc = SCREENS[state]; if (sc && sc.move) sc.move(e);
-  cv.style.cursor = (state === 'title' || state === 'select' || state === 'edit') ? (hitUi() ? 'pointer' : 'default') : state === 'room' ? (hitUi() ? 'pointer' : (room.grabs.length || room.inds.length ? 'grabbing' : 'grab')) : 'default';
+  cv.style.cursor = (state === 'title' || state === 'select' || state === 'edit' || state === 'jukebox') ? (hitUi() ? 'pointer' : 'default') : state === 'room' ? (hitUi() ? 'pointer' : (room.grabs.length || room.inds.length ? 'grabbing' : 'grab')) : 'default';
 });
 addEventListener('wheel', e => { if (state === 'edit') edScroll = clamp(edScroll + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / T / 2, 0, Math.max(0, edLevel.len - 20)); }, { passive: true });
 function release(e) {
