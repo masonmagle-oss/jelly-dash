@@ -246,6 +246,9 @@
   const paces = FULL ? [.85, 1, 1.12] : [1];
   for (const L of J.OFFICIAL) for (const pace of paces)
     test(`level is beatable: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.solveSync(Object.assign({}, L, { bpm: L.bpm * pace }), 30000); ok(r.ok, `solver reached ${r.pct}%`); }, { slow: true });
+  // 100% must be possible: one winning run can touch every heart of every official level (Normal and Spicy are the paces that keep hearts)
+  for (const L of J.OFFICIAL) for (const pace of [1, 1.12])
+    test(`every heart can be collected in one run: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `best run gets ${r.best}/${r.total}; unreachable (add to UNREACHABLE_HEARTS in levels.js): ${JSON.stringify(r.missed)}`); }, { slow: true });
 
   /* ---------- runner ---------- */
   (async () => {
