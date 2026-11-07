@@ -1,0 +1,9 @@
+{
+  "appId": "com.masonmagle.jellydash",
+  "appName": "Jelly Dash",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f6dcf0"
+  }
+}

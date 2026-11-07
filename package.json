@@ -1,0 +1,12 @@
+{
+  "name": "jelly-dash",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jelly Dash, wrapped with Capacitor for iOS. The game itself is plain static files; see IOS-BUILD.md.",
+  "scripts": {
+    "prep": "node prep-web.js",
+    "ios:add": "npx cap add ios",
+    "ios:sync": "node prep-web.js && npx cap sync ios",
+    "ios:open": "npx cap open ios"
+  }
+}
