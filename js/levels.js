@@ -104,6 +104,17 @@ const OFFICIAL = [
 ].map(([n, st, pal, sc, bpm, sty, auto, coy, extra], i) => genLevel('o' + i, n, st, pal, sc, bpm, sty, auto !== false, coy, extra));
 const moveBefore = (id, beforeName) => { const [l] = OFFICIAL.splice(OFFICIAL.findIndex(q => q.id === id), 1); OFFICIAL.splice(OFFICIAL.findIndex(q => q.name === beforeName), 0, l); };
 moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush');
+/* Hearts that no winning run can take together with the rest (the arc's low end hearts sit where the jump over the hazard has already lifted you), found with
+   heartsSync() in solver.js (at Normal and at Spicy pace, the paces that keep hearts) and removed so every official level can be finished with all of its hearts.
+   [x, y] in level units. The test suite re-runs the search,
+   so if a level script or the jump physics change, it fails until this list is regenerated (each level's `missed` list from heartsSync). */
+const UNREACHABLE_HEARTS = {
+  'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1]], 'Orb Orchard': [[133, 3.6]], 'Sugar Rush': [[99, 1], [157, 3.6]],
+  'Bubble Tea': [[55, 1], [101, 3.6], [205, 3.6], [45, 3.6], [81, 3.6], [137, 3.6], [173, 3.6]],
+  'Sparkle Storm': [[97, 2.2], [119, 1]], 'Orbital': [[160, 1.8]], 'Heartbreaker': [[75, 1]], 'Moonlit Mochi': [[281, 3.6], [291, 1]],
+  'Slime Queen': [[163, 1], [361, 3.6], [371, 1], [460, 2], [519, 1.2]],
+};
+for (const L of OFFICIAL) { const drop = UNREACHABLE_HEARTS[L.name]; if (drop) L.objs = L.objs.filter(o => o.t !== 'heart' || !drop.some(([x, y]) => Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002)); }
 /* ---------- worlds ----------
    Every official level belongs to a world; a world sets the palette, the song and the ambience. Levels run in order, so each world is a contiguous stretch. */
 const WORLDS = [
