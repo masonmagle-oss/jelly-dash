@@ -156,6 +156,14 @@
   test('editor check: the screen stays "solving" between steps (long levels)', () => {
     J.openEditor(level('Slime Queen')); const g = J.solveStart(); ok(g.next && J.getState() === 'solving'); g.next(); ok(J.getState() === 'solving', 'state restored after the first yield'); g.return(); J.setState('title');
   }, { slow: true });
+  test('editor check: drops hearts nobody can collect, and Undo brings them back', () => {
+    const L = J.genLevel('t', 't', 3, [0, 1, 2], 'bsp', 104, 0, true, .09), n0 = L.objs.filter(o => o.t === 'heart').length;   // a raised platform with a spike on it: its low end heart is out of reach
+    J.openEditor(L); const g = J.solveStart(); let r; while (!(r = g.next()).done);
+    ok(r.value.ok && r.value.dropped > 0, 'beatable, and the unreachable heart goes: ' + JSON.stringify(r.value));
+    eq(J.getEd().objs.filter(o => o.t === 'heart').length, n0 - r.value.dropped, 'hearts left');
+    const h = J.heartsSync(J.getEd(), 6); eq(h.best, h.total, 'every remaining heart can be collected');
+    J.edUndo(); eq(J.getEd().objs.filter(o => o.t === 'heart').length, n0, 'Undo brings them back'); J.setState('title');
+  }, { slow: true });
 
   /* ---------- the jelly ---------- */
   test('squish room: a folded body heals itself', async () => {
@@ -241,6 +249,10 @@
     for (let i = 0; i < 3; i++) solver.next(); cancelSolve(); eq(J.getState(), 'select', 'back to the list'); ok(!solver && !solveDone, 'job cleared');
     await toTitle();
   });
+  test('daily level: every heart can be collected in one run', () => {
+    const L = makeDaily(); ok(L && L.daily, 'a daily level');
+    for (const pace of [1, 1.12]) { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `at ${pace}x: ${r.best}/${r.total}, unreachable ${JSON.stringify(r.missed)}`); }
+  }, { slow: true });
 
   /* ---------- the levels themselves ---------- */
   const paces = FULL ? [.85, 1, 1.12] : [1];
