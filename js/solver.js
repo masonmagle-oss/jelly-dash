@@ -50,8 +50,8 @@ function solveSync(L, ms = 20000) {
 // The most hearts one winning run can collect. Same search as solveGen, but every state also carries the set of hearts it has touched; per physics state it
 // keeps up to `keep` records with different sets (a record is dropped when another one already has all of its hearts). The result is a lower bound, so
 // best === total proves every heart can be had in one run. `missed` lists the hearts the best run leaves behind, in level units: move or remove those.
-function heartsSync(L, keep = 6) {
-  buildLevel(L); simming = true; const hbSave = HB; HB = HB_DEF;
+function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buildLevel() last built; yields progress (0..1) like solveGen. `cap` limits the states kept per step (as solveGen does) to trade accuracy for speed: a capped search can only miss hearts, never claim one it did not collect
+  simming = true; const hbSave = HB; HB = HB_DEF;
   const sv = { state, mode, ghost, P: { ...P }, held: inp.held, buf: inp.buf };
   try {
     mode = 'dash'; ghost = 0;
@@ -62,7 +62,7 @@ function heartsSync(L, keep = 6) {
     const subset = (a, b) => { for (let i = 0; i < NW; i++) if ((a[i] & ~b[i]) !== 0) return false; return true; };   // every heart of a is also in b
     const snap = () => ({ P: { ...P }, pc: pads.map(p => p.cool), oc: orbs.map(o => o.used), h: inp.held });
     const rest = s => { Object.assign(P, s.P); pads.forEach((p, i) => { p.cool = s.pc[i]; }); orbs.forEach((o, i) => { o.used = s.oc[i]; }); };
-    let layer = [{ s: snap(), m: new Int32Array(NW), c: 0 }], best = null, won = false;
+    let layer = [{ s: snap(), m: new Int32Array(NW), c: 0 }], best = null, won = false, maxwx = 0;
     for (let it = 0; layer.length && it < 60000 && !won; it++) {
       const next = new Map();
       for (const r of layer) for (let hold = 0; hold < 2; hold++) {
@@ -81,12 +81,47 @@ function heartsSync(L, keep = 6) {
         if (kept.length > keep) { kept.sort((a, b) => b.c - a.c); kept.length = keep; }
         next.set(key, kept);
       }
-      layer = []; for (const arr of next.values()) for (const q of arr) layer.push(q);
+      layer = []; for (const arr of next.values()) for (const q of arr) { layer.push(q); if (q.s.P.wx > maxwx) maxwx = q.s.P.wx; }
+      if (layer.length > cap) { layer.sort((a, b) => a.s.P.y - b.s.P.y || a.s.P.vy - b.s.P.vy); const st = layer.length / cap; layer = Array.from({ length: cap }, (_, i) => layer[Math.floor(i * st)]); }
+      if (it % 8 === 0) { state = 'solving'; yield maxwx / FINISH; }   // as in solveGen: put the screen back before handing control to the frame loop
     }
     if (!best) return { ok: false, total: hearts.length, best: 0, missed: [] };
     const missed = []; hearts.forEach((h, i) => { if (!(best.m[i >> 5] & (1 << (i & 31)))) missed.push({ x: Math.round((h.x / T - .5) * 1000) / 1000, y: Math.round(((GY - h.y) / T - .5) * 1000) / 1000 }); });
     return { ok: true, total: hearts.length, best: best.c, missed };
   } finally { HB = hbSave; simming = false; state = sv.state; mode = sv.mode; ghost = sv.ghost; Object.assign(P, sv.P); inp.held = sv.held; inp.buf = sv.buf; hearts.forEach(h => { h.got = false; }); }
+}
+function heartsSync(L, keep = 6) {   // synchronous version, for tests
+  buildLevel(L); const g = heartsGen(keep); let r; while (!(r = g.next()).done); return r.value;
+}
+// The hearts of L that no winning run can collect together with the rest, at Normal and at Spicy pace (the paces that keep hearts); [{x, y}] in level units.
+// Yields progress (0..1). Removing the union leaves every other heart collectable at both paces: hearts never change the physics.
+function* unreachableHearts(L, keep = 6, cap = Infinity) {
+  const paces = [1, 1.12], bad = [];
+  for (let k = 0; k < paces.length; k++) {
+    buildLevel(Object.assign({}, L, { bpm: (L.bpm || BASE_BPM) * paces[k] }));
+    const g = heartsGen(keep, cap); let r;
+    try { while (!(r = g.next()).done) yield (k + r.value) / paces.length; } finally { g.return(); }
+    if (r.value.ok) for (const m of r.value.missed) if (!bad.some(b => b.x === m.x && b.y === m.y)) bad.push(m);
+  }
+  return bad;
+}
+// Settings for levels made at run time (the daily level, the editor's Check): 3 records per state and at most 200 states per step, about 5x faster than the
+// full search on levels with a ship section (3 s instead of 18 s here) and the same answer in every case tried. The official levels use the full search.
+const QUICK_HEARTS = [3, 200];
+function dropHearts(L, bad) {   // removes those hearts from L.objs; returns how many went
+  const n = L.objs.length;
+  if (bad.length) L.objs = L.objs.filter(o => o.t !== 'heart' || !bad.some(m => Math.abs(o.x - m.x) < .002 && Math.abs(o.y - m.y) < .002));
+  return n - L.objs.length;
+}
+// The editor's Check: proves the level can be beaten, then drops the hearts nobody can collect in a winning run (one Undo brings them back).
+function* checkGen() {
+  const g = solveGen(); let r;
+  try { while (!(r = g.next()).done) yield r.value * .5; } finally { g.return(); }
+  if (!r.value.ok) return r.value;
+  const u = unreachableHearts(edLevel, ...QUICK_HEARTS); let q;
+  try { while (!(q = u.next()).done) yield .5 + q.value * .5; } finally { u.return(); }
+  let dropped = 0; if (q.value.length) { edPush(); dropped = dropHearts(edLevel, q.value); if (dropped) edDirty = true; }
+  return Object.assign({}, r.value, { dropped });
 }
 let solver = null, solverPct = 0, solveDone = null;   // solveDone: what to do with the result when the solver was started for something other than the editor (the daily level)
 function cancelSolve() {

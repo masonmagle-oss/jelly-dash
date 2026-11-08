@@ -20,7 +20,7 @@ function frame(now) {
       if (r.done && solveDone) { const f = solveDone; solver = null; solveDone = null; state = 'select'; f(r.value); break; }
       if (r.done) {
         solver = null; buildLevel(edLevel); state = 'edit';
-        const v = r.value; say(v.ok ? '✓ Beatable! There is a way through.' + tightNote() : `✗ Couldn't find a way through (got to ${v.pct}%)`, 5); break;
+        const v = r.value; say(v.ok ? '✓ Beatable! There is a way through.' + tightNote() + (v.dropped ? ` Removed ${v.dropped} heart${v.dropped > 1 ? 's' : ''} nobody can reach (Undo brings back).` : '') : `✗ Couldn't find a way through (got to ${v.pct}%)`, 5); break;
       }
       solverPct = r.value;
     }

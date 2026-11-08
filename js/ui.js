@@ -84,7 +84,11 @@ function* dailyGen() {
     const L = genLevel('daily-' + seed, name, 3, pal, toks.join(' '), bpm, Math.floor(rnd() * SONG_N), false);
     buildLevel(L); const g = solveGen(); let r;
     try { while (!(r = g.next()).done) yield (tries + r.value) / 12; } finally { g.return(); }
-    if (r.value.ok) { L.daily = true; return L; }
+    if (r.value.ok) {   // beatable: now drop any hearts no winning run could take, so today's level can be finished with all of them
+      const u = unreachableHearts(L, ...QUICK_HEARTS); let q;
+      try { while (!(q = u.next()).done) yield (tries + .8 + q.value * .2) / 12; } finally { u.return(); }
+      dropHearts(L, q.value); L.daily = true; return L;
+    }
   }
   return null;
 }
@@ -287,7 +291,7 @@ function drawEditorMore() {
   items.forEach((it, i) => btn(it[0], px + 24 + (i % 4) * 182, py + 60 + Math.floor(i / 4) * 62, 170, 50, () => { if (it[0] !== 'Done') sfx.click(); it[1](); }, { size: 17, r: 16, on: (it[0] === 'Hold to hop' || it[0] === 'Tap each hop') ? edLevel.auto === false : (it[0] === '■ Stop music') }));
 }
 function saveTemp() { /* keep working copy as the draft; nothing to do besides rebuild */ buildLevel(edLevel); }
-function solveGen_start() { buildLevel(edLevel); state = 'solving'; solverPct = 0; return solveGen(); }
+function solveGen_start() { buildLevel(edLevel); state = 'solving'; solverPct = 0; return checkGen(); }
 function drawSolving() {
   if (solveDone) { drawBg(tg * 25, theme(.45 + Math.sin(tg * .3) * .3, [0, 1, 2])); } else drawEditor();   // the daily level is cooked from the menu, not the editor
   ctx.fillStyle = 'rgba(60,20,70,.55)'; ctx.fillRect(-VX, 0, VW, H);
