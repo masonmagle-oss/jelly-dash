@@ -93,10 +93,11 @@ function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buil
 function heartsSync(L, keep = 6) {   // synchronous version, for tests
   buildLevel(L); const g = heartsGen(keep); let r; while (!(r = g.next()).done); return r.value;
 }
-// The hearts of L that no winning run can collect together with the rest, at Normal and at Spicy pace (the paces that keep hearts); [{x, y}] in level units.
-// Yields progress (0..1). Removing the union leaves every other heart collectable at both paces: hearts never change the physics.
+// The hearts of L that no winning run can collect together with the rest, at every pace the game offers (Chill, Normal, Spicy); [{x, y}] in level units.
+// Yields progress (0..1). Removing the union leaves every other heart collectable at all three paces: hearts never change the physics.
+const PACES = [.85, 1, 1.12];   // the Chill, Normal and Spicy multipliers of the pace buttons in ui.js
 function* unreachableHearts(L, keep = 6, cap = Infinity) {
-  const paces = [1, 1.12], bad = [];
+  const paces = PACES, bad = [];
   for (let k = 0; k < paces.length; k++) {
     buildLevel(Object.assign({}, L, { bpm: (L.bpm || BASE_BPM) * paces[k] }));
     const g = heartsGen(keep, cap); let r;
@@ -121,11 +122,13 @@ function* checkGen() {
   const u = unreachableHearts(edLevel, ...QUICK_HEARTS); let q;
   try { while (!(q = u.next()).done) yield .5 + q.value * .5; } finally { u.return(); }
   let dropped = 0; if (q.value.length) { edPush(); dropped = dropHearts(edLevel, q.value); if (dropped) edDirty = true; }
+  edLevel.checkedSig = levelCode(edLevel);   // playLevel() (ui.js) skips its own check for a level whose code still matches
   return Object.assign({}, r.value, { dropped });
 }
+let solveLabel = '';   // the title on the solving screen for a job that is not the editor's Check ('' = today's level)
 let solver = null, solverPct = 0, solveDone = null;   // solveDone: what to do with the result when the solver was started for something other than the editor (the daily level)
 function cancelSolve() {
   if (solver) solver.return(); solver = null;
-  if (solveDone) { solveDone = null; buildLevel(OFFICIAL[0]); resetRun(); state = 'select'; say('Cancelled', 1.5); return; }
+  if (solveDone) { solveDone = null; solveLabel = ''; buildLevel(OFFICIAL[0]); resetRun(); state = 'select'; say('Cancelled', 1.5); return; }
   buildLevel(edLevel); state = 'edit'; say('Check cancelled');
 }

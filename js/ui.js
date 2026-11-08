@@ -97,6 +97,19 @@ function startDaily() {
   if (dailyL && dailyL.id === 'daily-' + dailySeed()) { go(dailyL); return; }
   state = 'solving'; solverPct = 0; solveDone = go; solver = dailyGen();
 }
+// A level that came from somewhere else (a shared code, an older save, the editor) can hold hearts nobody can collect. Before its first play, and again after
+// any edit (its code no longer matches checkedSig), those hearts are dropped, at every pace; the "Checking the hearts…" screen can be cancelled.
+function* trimGen(L) {
+  const u = unreachableHearts(L, ...QUICK_HEARTS); let q;
+  try { while (!(q = u.next()).done) yield q.value; } finally { u.return(); }
+  const n = dropHearts(L, q.value); L.checkedSig = levelCode(L); persist(); return n;
+}
+function playLevel(L) {
+  if (OFFICIAL.includes(L) || L.daily || L.checkedSig === levelCode(L) || !L.objs.some(o => o.t === 'heart')) { startLevel(L, mode, false); return; }
+  state = 'solving'; solverPct = 0; solveLabel = 'Checking the hearts…';
+  solveDone = n => { solveLabel = ''; if (n) say(`Removed ${n} heart${n > 1 ? 's' : ''} nobody can reach`, 3.5); startLevel(L, mode, false); };
+  solver = trimGen(L);
+}
 function makeDaily() {   // synchronous version, for tests
   const g = dailyGen(); let r; while (!(r = g.next()).done); return r.value;
 }
@@ -135,7 +148,7 @@ function drawSelect() {
     const L = c.l, idx = OFFICIAL.indexOf(L);
     btn('', x, y, w, h, () => {
       sfx.click();
-      if (pickFor === 'edit') openEditor(L); else startLevel(L, mode, false);
+      if (pickFor === 'edit') openEditor(L); else playLevel(L);
     }, { r: 22 });
     txt((idx >= 0 && !L.tutorial ? (OFFICIAL.filter(q => !q.tutorial).indexOf(L) + 1) + '. ' : '') + L.name, x + w / 2, y + 26, L.name.length > (official ? 15 : 11) ? 17 : 20, C.pink, null);
     if (L.stars) stars(L.stars, x + w / 2 - 70, y + 52, 8); else txt('custom', x + w / 2 - 40, y + 52, 15, C.mauve, null);
@@ -146,7 +159,7 @@ function drawSelect() {
     const rt = store.rate[L.id] || 0;   // rhythm rating: up to 3 hearts for timing accuracy
     for (let i = 0; i < 3; i++) { ctx.fillStyle = i < rt ? C.hot : 'rgba(200,160,220,.5)'; heartPath(x + w - 62 + i * 19, y + 77, 7); ctx.fill(); }
     if (L.custom && pickFor !== 'edit') {
-      ui.pop(); ui.push({ x, y, w: w - 34, h, fn: () => { sfx.click(); startLevel(L, mode, false); } });
+      ui.pop(); ui.push({ x, y, w: w - 34, h, fn: () => { sfx.click(); playLevel(L); } });
     }
     if (L.custom) {
       btn('⧉', x + 4, y + 4, 36, 24, () => { sfx.click(); copyText(levelCode(L), 'Level code copied'); }, { size: 14, r: 10 });
@@ -295,7 +308,7 @@ function solveGen_start() { buildLevel(edLevel); state = 'solving'; solverPct = 
 function drawSolving() {
   if (solveDone) { drawBg(tg * 25, theme(.45 + Math.sin(tg * .3) * .3, [0, 1, 2])); } else drawEditor();   // the daily level is cooked from the menu, not the editor
   ctx.fillStyle = 'rgba(60,20,70,.55)'; ctx.fillRect(-VX, 0, VW, H);
-  txt(solveDone ? 'Cooking today\'s level…' : 'Checking if it can be beaten…', W / 2, 220, 34, '#fff', C.plum);
+  txt(solveDone ? (solveLabel || 'Cooking today\'s level…') : 'Checking if it can be beaten…', W / 2, 220, 34, '#fff', C.plum);
   ctx.fillStyle = 'rgba(255,255,255,.7)'; rr(W / 2 - 220, 260, 440, 22, 11); ctx.fill();
   ctx.fillStyle = C.pink; rr(W / 2 - 220, 260, Math.max(22, 440 * solverPct), 22, 11); ctx.fill();
   btn('Cancel', W / 2 - 70, 312, 140, 46, cancelSolve, { size: 20 });
