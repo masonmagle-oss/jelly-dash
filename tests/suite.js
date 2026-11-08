@@ -251,15 +251,25 @@
   });
   test('daily level: every heart can be collected in one run', () => {
     const L = makeDaily(); ok(L && L.daily, 'a daily level');
-    for (const pace of [1, 1.12]) { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `at ${pace}x: ${r.best}/${r.total}, unreachable ${JSON.stringify(r.missed)}`); }
+    for (const pace of [.85, 1, 1.12]) { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `at ${pace}x: ${r.best}/${r.total}, unreachable ${JSON.stringify(r.missed)}`); }
+  }, { slow: true });
+  test('custom levels: the first play drops hearts nobody can collect (once), then plays', () => {
+    const L = J.genLevel('t', 't', 3, [0, 1, 2], 'bsp', 104, 0, true, .09), n0 = L.objs.filter(o => o.t === 'heart').length, custom = J.getStore().custom;
+    custom.push(L); J.setState('select'); playLevel(L);
+    eq(J.getState(), 'solving', 'it checks the hearts first'); ok(solver && solveDone, 'job queued');
+    let r; while (!(r = solver.next()).done); const f = solveDone; solver = null; solveDone = null; J.setState('select'); f(r.value);   // what the frame loop does with a finished job
+    eq(J.getState(), 'play', 'then it plays'); ok(L.objs.filter(o => o.t === 'heart').length < n0, 'an unreachable heart went'); ok(L.checkedSig, 'marked as checked');
+    for (const pace of [.85, 1, 1.12]) { const h = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); eq(h.best, h.total, `every remaining heart at ${pace}x`); }
+    J.setState('select'); playLevel(L); eq(J.getState(), 'play', 'a checked level goes straight in');
+    custom.pop(); J.setState('title');
   }, { slow: true });
 
   /* ---------- the levels themselves ---------- */
   const paces = FULL ? [.85, 1, 1.12] : [1];
   for (const L of J.OFFICIAL) for (const pace of paces)
     test(`level is beatable: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.solveSync(Object.assign({}, L, { bpm: L.bpm * pace }), 30000); ok(r.ok, `solver reached ${r.pct}%`); }, { slow: true });
-  // 100% must be possible: one winning run can touch every heart of every official level (Normal and Spicy are the paces that keep hearts)
-  for (const L of J.OFFICIAL) for (const pace of [1, 1.12])
+  // 100% must be possible: one winning run can touch every heart of every official level, at every pace the game offers (Chill, Normal, Spicy)
+  for (const L of J.OFFICIAL) for (const pace of [.85, 1, 1.12])
     test(`every heart can be collected in one run: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `best run gets ${r.best}/${r.total}; unreachable (add to UNREACHABLE_HEARTS in levels.js): ${JSON.stringify(r.missed)}`); }, { slow: true });
 
   /* ---------- runner ---------- */
