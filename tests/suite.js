@@ -164,6 +164,20 @@
     const h = J.heartsSync(J.getEd(), 6); eq(h.best, h.total, 'every remaining heart can be collected');
     J.edUndo(); eq(J.getEd().objs.filter(o => o.t === 'heart').length, n0, 'Undo brings them back'); J.setState('title');
   }, { slow: true });
+  /* ---------- squish room and studio ---------- */
+  test('squish room: the first visit shows a one-time tip, later visits do not', async () => {
+    const st = J.getStore(); st.seenRoom = false; toast = { t: '', life: 0 };
+    enterRoom(); ok(/^Tip:/.test(toast.t) && toast.life > 3, 'a tip on the first visit'); ok(st.seenRoom, 'remembered');
+    toast = { t: '', life: 0 }; enterRoom(); eq(toast.t, '', 'no tip the second time'); await toTitle();
+  });
+  test('squish studio: finishing a shape that opens a skin says so', async () => {
+    const st = J.getStore(), saved = { studio: st.studio, best: st.best }, preset0 = roomPreset;   // (the Studio switches the room to clay: put it back for the tests after this one)
+    st.best = {}; st.studio = { stars: { '__earlier': 2 } };                     // 2 stars so far: one more star makes 3 = one "level" = Aqua Gel opens
+    startStudio(); studioShape = 0; studioSimAvg = .5; toast = { t: '', life: 0 }; completeShape();
+    eq(st.studio.stars[SHAPES[0].name], 1, 'one star earned'); await new Promise(r => setTimeout(r, 1700));
+    ok(/Unlocked: .*Aqua Gel/.test(toast.t), 'the unlock is announced: ' + toast.t);
+    st.studio = saved.studio; st.best = saved.best; songStop(); studio = false; flow = 0; await toTitle(); setPreset(preset0);   // (this file's toTitle only changes the screen: leave Studio mode and its song by hand)
+  });
 
   /* ---------- the jelly ---------- */
   test('squish room: a folded body heals itself', async () => {
