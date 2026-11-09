@@ -21,10 +21,11 @@
     for (const junk of ['', 'abc', 'JD1.', 'JD1.@@@', '{}', 'x'.repeat(200000)]) eq(J.parseLevelCode(junk), null, 'junk code accepted');
   });
   test('save normaliser repairs anything', () => {
-    const bad = [null, undefined, 5, 'x', [], {}, { custom: 'x', best: null, pace: 'a', studio: 5, set: 3 }, { custom: [null, { objs: 5 }, { objs: [] }], score: [], rate: 7, haz: -4, skin: 'q', set: { music: 99, sfx: -1, haptics: 'no', reduceMotion: 'x' } }];
+    const bad = [null, undefined, 5, 'x', [], {}, { custom: 'x', best: null, pace: 'a', studio: 5, goals: 5, set: 3 }, { goals: { done: 'x', mats: [], hops: -3, secs: 'q', day: 7, daySecs: null, cozyDays: 'z', streak: {}, lastCozy: ['a'] } }, { custom: [null, { objs: 5 }, { objs: [] }], score: [], rate: 7, haz: -4, skin: 'q', set: { music: 99, sfx: -1, haptics: 'no', reduceMotion: 'x' } }];
     for (const b of bad) {
       const s = J.normalizeStore(b);
       ok(Array.isArray(s.custom) && s.custom.every(l => l && Array.isArray(l.objs)), 'custom'); ok(s.best && s.score && s.rate && s.studio && s.studio.stars, 'maps');
+      ok(s.goals && s.goals.done && s.goals.mats && s.goals.hops >= 0 && s.goals.secs >= 0 && s.goals.daySecs >= 0 && s.goals.cozyDays >= 0 && s.goals.streak >= 0 && typeof s.goals.day === 'string' && typeof s.goals.lastCozy === 'string', 'goals');
       ok(s.pace > 0 && s.haz >= 0 && s.skin >= 0, 'numbers'); ok(s.set.music >= 0 && s.set.music <= 1 && s.set.sfx >= 0 && s.set.sfx <= 1, 'volumes'); ok([null, true, false].includes(s.set.reduceMotion), 'reduce motion');
     }
     eq(J.normalizeStore({ set: { music: .3 } }).set.music, .3, 'good values are kept');
@@ -171,12 +172,39 @@
     toast = { t: '', life: 0 }; enterRoom(); eq(toast.t, '', 'no tip the second time'); await toTitle();
   });
   test('squish studio: finishing a shape that opens a skin says so', async () => {
-    const st = J.getStore(), saved = { studio: st.studio, best: st.best }, preset0 = roomPreset;   // (the Studio switches the room to clay: put it back for the tests after this one)
-    st.best = {}; st.studio = { stars: { '__earlier': 2 } };                     // 2 stars so far: one more star makes 3 = one "level" = Aqua Gel opens
+    const st = J.getStore(), saved = { studio: st.studio, best: st.best, goals: st.goals }, preset0 = roomPreset;   // (the Studio switches the room to clay: put it back for the tests after this one)
+    st.best = {}; st.goals = null; st.studio = { stars: { '__earlier': 2 } };                     // 2 stars so far: one more star makes 3 = one "level" = Aqua Gel opens
     startStudio(); studioShape = 0; studioSimAvg = .5; toast = { t: '', life: 0 }; completeShape();
     eq(st.studio.stars[SHAPES[0].name], 1, 'one star earned'); await new Promise(r => setTimeout(r, 1700));
     ok(/Unlocked: .*Aqua Gel/.test(toast.t), 'the unlock is announced: ' + toast.t);
-    st.studio = saved.studio; st.best = saved.best; songStop(); studio = false; flow = 0; await toTitle(); setPreset(preset0);   // (this file's toTitle only changes the screen: leave Studio mode and its song by hand)
+    st.studio = saved.studio; st.best = saved.best; st.goals = saved.goals; songStop(); studio = false; flow = 0; await toTitle(); setPreset(preset0);   // (this file's toTitle only changes the screen: leave Studio mode and its song by hand)
+  });
+  test('squish room goals: poking, pulling, pinning, hopping and trying every material tick them off', async () => {
+    const st = J.getStore(), saved = { goals: st.goals, best: st.best, studio: st.studio, preset: roomPreset, tip: st.seenRoom };
+    st.goals = null; st.best = {}; st.studio = { stars: {} }; st.seenRoom = true; enterRoom(); const g = goalStore(), edge = { x: J.room.x[0], y: J.room.y[0] };
+    roomDown('a', 480, 220, 0); ok(g.done.dent, 'poke the middle'); roomRelease('a', true);
+    roomDown('b', edge.x, edge.y, 0); ok(g.done.pull, 'pull the skin'); roomRelease('b', true);
+    roomPin(edge.x, edge.y); ok(g.done.pin, 'pin a spot'); room.grabs = [];
+    for (let i = 0; i < 10; i++) { roomHopT = 0; roomHop(); } ok(g.done.hop, 'ten hops');
+    for (const m of ['jelly', 'slime', 'mochi', 'dough', 'foam']) setPreset(m); ok(g.done.mats, 'every material');
+    roomTouched = true; roomIdle = 5; goalsStep(.016, 0); ok(g.done.rest, 'let it settle');
+    room.grabs = [{ id: 'x', mx: 0, my: 0, items: [] }]; goalsStep(.016, .9); ok(g.done.stretch, 'big stretch');
+    room.grabs.push({ id: 'p', pin: true, mx: 0, my: 0, items: [] }); goalsStep(.016, .6); ok(g.done.string, 'a stretched string');
+    roomElong = .7; roomRelease('x'); ok(g.done.boing, 'let go of a big stretch'); room.grabs = [];
+    eq(goalsDone(), 9, 'nine so far (new look and the cozy minute are next)'); ok(st.goals === g, 'kept in the save');
+    st.goals = saved.goals; st.best = saved.best; st.studio = saved.studio; st.seenRoom = saved.tip; await toTitle(); setPreset(saved.preset);
+  });
+  test('squish room goals: three goals count as a level and open a skin; cozy days only go up', async () => {
+    const st = J.getStore(), saved = { goals: st.goals, best: st.best, studio: st.studio };
+    st.goals = null; st.best = {}; st.studio = { stars: {} }; const g = goalStore(); toast = { t: '', life: 0 };
+    goalDone('dent'); goalDone('pull'); eq(doneCount(), 0, 'two goals are not a level yet'); goalDone('pin'); eq(doneCount(), 1, 'three goals are one level');
+    await new Promise(r => setTimeout(r, 1700)); ok(/Unlocked: .*Aqua Gel/.test(toast.t), 'the unlock is announced: ' + toast.t);
+    st.goals = null; const c = goalStore();
+    cozyTick(61, '2026-11-01'); eq([c.cozyDays, c.streak], [1, 1], 'a minute makes a cozy day'); ok(c.done.cozy, 'and the cozy-minute goal');
+    cozyTick(30, '2026-11-01'); eq(c.cozyDays, 1, 'only one cozy day per day');
+    cozyTick(61, '2026-11-02'); eq([c.cozyDays, c.streak], [2, 2], 'the next day adds to the run');
+    cozyTick(61, '2026-11-04'); eq([c.cozyDays, c.streak], [3, 1], 'a missed day only restarts the run, the days stay');
+    st.goals = saved.goals; st.best = saved.best; st.studio = saved.studio; await toTitle();
   });
 
   /* ---------- the jelly ---------- */
