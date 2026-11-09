@@ -120,7 +120,7 @@
       ok(t.notes.every(n => Number.isInteger(n)), t.id + ' notes must be whole semitones'); ok(Math.max(...t.notes) - Math.min(...t.notes) <= 24, t.id + ' spans more than two octaves');
       for (let si = 0; si < J.SONG_N; si++) { const c = J.styleCfg(si); for (let i = 0; i < t.notes.length; i++) { const m = tuneMidi(t, c, i); ok(m >= 46 && m <= 86, t.id + ' note ' + i + ' lands at MIDI ' + m + ' in ' + c.name + ' (too low or too piercing)'); } }
     }
-    const saveT = curTune, saveI = tuneI, saveC = combo;
+    const saveT = curTune, saveI = tuneI, saveC = combo, keepTunes = JSON.stringify(store.tunes);
     try {
       for (const t of TUNES) {
         curTune = t; tuneI = 0; combo = 0; const buf = await J.renderSfxOffline(() => { tuneNote('PERFECT', J.styleCfg(2)); }, 1.5), d = buf.getChannelData(0); let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
@@ -129,7 +129,24 @@
       curTune = TUNES[0]; tuneI = TUNES[0].notes.length - 1; ok(tuneNote('GREAT', J.styleCfg(2)) === true && tuneI === 0, 'finishing the tune wraps it round and says so');
       await J.startLevel(J.OFFICIAL[0], 'dash', false); eq(curTune, TUNES[WORLD_TUNE[J.OFFICIAL[0].world]], 'a level plays its world tune'); eq(tuneI, 0);
       J.setState('title');
-    } finally { curTune = saveT; tuneI = saveI; combo = saveC; }
+    } finally { store.tunes = JSON.parse(keepTunes); persist(); curTune = saveT; tuneI = saveI; combo = saveC; }
+  }, { slow: true });
+  test('jukebox: tune progress is saved, collecting unlocks playback, and the screen is tappable', async () => {
+    const keep = JSON.stringify(store.tunes), saveT = curTune, saveI = tuneI, saveC = combo;
+    try {
+      eq(normalizeStore({ tunes: { ode: { n: '2', pos: -5 }, bad: 7 } }).tunes.ode.n, 2, 'saved tunes are cleaned'); eq(normalizeStore({ tunes: { ode: { n: 1, pos: -5 } } }).tunes.ode.pos, 0, 'negative positions are cleaned'); ok(!('bad' in normalizeStore({ tunes: { bad: 7 } }).tunes), 'junk entries are dropped');
+      store.tunes = {}; curTune = TUNES[0]; tuneI = 0; combo = 0; const len = TUNES[0].notes.length;
+      for (let i = 0; i < len - 1; i++) tuneNote('PERFECT', J.styleCfg(2));
+      eq(tuneRec(TUNES[0]).pos, len - 1, 'progress is remembered');
+      dispatchEvent(new Event('pagehide')); eq(JSON.parse(localStorage.getItem(SAVE_KEY)).tunes.ode.pos, len - 1, 'leaving the page persists an unfinished run'); eq(tunesCollected(), 0, 'not collected until played through');
+      await J.startLevel(J.OFFICIAL[0], 'dash', false); eq(tuneI, len - 1, 'the next run carries on from the bookmark'); tuneNote('GREAT', J.styleCfg(2));
+      eq(tunesCollected(), 1, 'finishing the tune collects it'); eq(tuneRec(TUNES[0]).n, 1); eq(tuneRec(TUNES[0]).pos, 0, 'and starts it over');
+      J.setState('jukebox'); J.draw(); eq(J.auditUi().length, 0, 'every Jukebox button is a comfortable touch target');
+      const rows = J.getUi().filter(b => /Ode to Joy|\? \? \?/.test(b.label)); eq(rows.length, TUNES.length, 'one row per tune');
+      const row = J.getUi().find(b => /Ode to Joy/.test(b.label)); row.fn(); ok(jukeI === 0 || !J.AC, 'tapping a collected tune plays it'); for (let i = 0; i < 3; i++) jukeTick(); jukeStop(); eq(jukeI, -1, 'and it can be stopped');
+      J.getUi().find(b => /\? \? \?/.test(b.label)).fn(); eq(jukeI, -1, 'a locked tune does not play');
+      J.setState('title');
+    } finally { store.tunes = JSON.parse(keep); persist(); curTune = saveT; tuneI = saveI; combo = saveC; jukeStop(); }
   }, { slow: true });
   test('brightness cap: a high note is much quieter than the same note an octave and a half lower', async () => {
     const lvl = async f => { const buf = await J.renderSfxOffline(() => tone(f, .3, { vol: .1, att: .005 }), 1); let m = 0; for (const x of buf.getChannelData(0)) m = Math.max(m, Math.abs(x)); return 20 * Math.log10(m + 1e-12); };

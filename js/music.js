@@ -170,12 +170,12 @@ function songStep(s, step, at, prog) {
   if (c.arp && prog > s.th.arp && (sec === 1 || c.arp.always)) {
     const a = c.arp.pattern[i]; if (a >= 0) (VOICES[c.arp.voice] || VOICES.pluck)(mf(root + c.arp.oct + ch[1][a % ch[1].length]), .32, c.arp.vol * 1.7, at, 'songfx', (step % 2 ? .4 : -.4));
   }
-  if (prog > s.th.lead) {   // the melody is doubled: one copy left, one slightly detuned and a hair late on the right, which makes it wide
+  if (prog > s.th.lead && !s.noLead) {   // (noLead: the Jukebox plays its own tune instead) the melody is doubled: one copy left, one slightly detuned and a hair late on the right, which makes it wide
     const m = motif(s, bar % 4 + (sec ? 4 : 0))[i];
     if (m) { const lv = VOICES[c.lead.voice] || VOICES.tri, f = mf(m + (c.lead.oct || 0)), v = (c.lead.vol || .03) * 1.2; lv(f, .75, v, at, 'songfx', -.45); lv(f * 1.0035, .75, v, at + .011, 'songfx', .45); }
   }
   if (bar % 8 === 7 && i === 8 && prog >= s.th.hat) noiseHit({ f0: 700, f1: 7000, q: .8, d: sixT * 8, vol: .022, at, bus: B, pan: -.2 });   // a riser into the next 8-bar section
-  if (i === 0 && bar % 4 === 0 && prog > s.th.lead) VOICES.bell(mf(root + 36 + (ch[1][2] || 7)), 1.2, .008, at, B, bar % 8 ? -.3 : .3);   // a little glitter on the first beat of a phrase
+  if (i === 0 && bar % 4 === 0 && prog > s.th.lead && !s.noLead) VOICES.bell(mf(root + 36 + (ch[1][2] || 7)), 1.2, .008, at, B, bar % 8 ? -.3 : .3);   // a little glitter on the first beat of a phrase
 }
 function songUpdate(prog) {
   if (!song || !AC) return;
@@ -202,9 +202,10 @@ function beatPulse() {
    The title, the level list and the Squish Room each have their own song. update() keeps the right one playing; a run, the editor preview and the
    Studio start their own songs and menu music steps aside. */
 let menuKey = null;
-function menuWanted() { return state === 'title' ? 'title' : (state === 'select' || state === 'settings') ? 'select' : (state === 'room' && !studio) ? 'room' : null; }
+function menuWanted() { return state === 'title' ? 'title' : (state === 'select' || state === 'settings' || state === 'jukebox') ? 'select' : (state === 'room' && !studio) ? 'room' : null; }
 function syncMenuMusic(dt) {
   if (audioSwapped) return;
+  if (jukeI >= 0) { if (song && menuKey === 'juke' && jukeTick()) { songT += dt; songUpdate(1); } else jukeStop(); return; }   // the Jukebox is playing a tune over its own song
   const want = menuWanted();
   if (want) {
     if (menuKey !== want || !song) { songStart({ id: 'menu-' + want, name: 'menu', style: MENU_STYLE[want], bpm: STYLES[MENU_STYLE[want]].bpm, menu: true }, 0); if (song) menuKey = want; }

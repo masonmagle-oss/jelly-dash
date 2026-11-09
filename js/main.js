@@ -6,9 +6,10 @@
 let last = performance.now(), acc = 0, govT = 0, govN = 0;
 // leaving the app (or a call, or a lock screen) pauses the audio and lets go of every finger
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { release(null); if (AC && AC.state === 'running') AC.suspend(); }
+  if (document.hidden) { tuneSave(); release(null); if (AC && AC.state === 'running') AC.suspend(); }
   else { last = performance.now(); govT = 0; govN = 0; if (AC && !muted) AC.resume(); }
 });
+addEventListener('pagehide', tuneSave);
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; acc += dt; menuArm = Math.max(0, menuArm - dt); resetArm = Math.max(0, resetArm - dt);
   // frame-time governor: if a phone cannot hold ~50 fps at this render size, draw smaller (the physics is unaffected)
