@@ -314,6 +314,31 @@
   for (const L of J.OFFICIAL) for (const pace of [.85, 1, 1.12])
     test(`every heart can be collected in one run: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `best run gets ${r.best}/${r.total}; unreachable (add to UNREACHABLE_HEARTS in levels.js): ${JSON.stringify(r.missed)}`); }, { slow: true });
 
+  /* ---------- the difficulty ramp ---------- */
+  // "Pressure" = how much the player has to get right per second. Every hazard is an event and counts 1000 / (its window of safe takeoffs, in ms at the level's tempo),
+  // so a narrow window or a faster tempo weighs more. Windows come from buildLevel's clusters (in tiles, so they shrink as the tempo rises). A spike group of 4+ or a gap of 6+
+  // is crossed with a pad or orb, which are counted as their own (medium) events. A ship row counts by how far its corridor moves from the last one (a big move leaves less slack).
+  const pressureOf = L => {
+    J.buildLevel(L); const K = L.bpm / 112.5, msTile = 1000 * T / (360 * K); let w = 0, n = 0, tight = Infinity;
+    const add = ms => { w += 1000 / ms; n++; tight = Math.min(tight, ms); };
+    for (const c of clusters) { if (c.ship || (c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45)); }
+    J.pads.forEach(() => add(300 / K)); for (const o of L.objs) if (o.t === 'orb') add(180 / K);
+    for (const m of L.script.matchAll(/ship:(\d+)/g)) [...m[1]].map(Number).forEach((s, i, a) => add(Math.max(120, 330 - 45 * Math.abs(s - (i ? a[i - 1] : 2))) / K));
+    return { P: w / (L.len * T / (360 * K)), secs: L.len * T / (360 * K), n, tight };
+  };
+  test('difficulty ramp: tempo never drops and the pressure climbs a notch with every level', () => {
+    const ls = J.OFFICIAL.slice(1), st = ls.map(pressureOf), P = st.map(s => s.P); J.buildLevel(J.OFFICIAL[0]);   // Welcome is the tutorial: it teaches the ideas, so it is not part of the ramp
+    for (let i = 1; i < ls.length; i++) {
+      ok(ls[i].bpm >= ls[i - 1].bpm, `${ls[i].name} (${ls[i].bpm} BPM) is slower than ${ls[i - 1].name} (${ls[i - 1].bpm})`);
+      ok(ls[i].stars >= ls[i - 1].stars, `${ls[i].name} has fewer stars than ${ls[i - 1].name}`);
+      ok(P[i] >= P[i - 1] + .1, `${ls[i].name} (pressure ${P[i].toFixed(2)}) is not clearly harder than ${ls[i - 1].name} (${P[i - 1].toFixed(2)})`);
+    }
+    const steps = P.slice(1).map((p, i) => p - P[i]), avg = (P[P.length - 1] - P[0]) / steps.length;
+    ok(P[P.length - 1] >= 2.5 * P[0], `the last level is only ${(P[P.length - 1] / P[0]).toFixed(1)}x the first (want 2.5x)`);
+    ok(Math.max(...steps) <= 2 * avg, `no cliff: the biggest step (${Math.max(...steps).toFixed(2)}) is over twice the average (${avg.toFixed(2)})`);
+    const q = ls[ls.length - 1]; ok(q.name === 'Slime Queen' && st[st.length - 1].secs === Math.max(...st.map(s => s.secs)), 'the last level is Slime Queen, and the longest');
+  });
+
   /* ---------- runner ---------- */
   (async () => {
     const out = document.getElementById('out'), sum = document.getElementById('sum'); let pass = 0, fail = 0;
