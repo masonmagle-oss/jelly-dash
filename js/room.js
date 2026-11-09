@@ -148,7 +148,10 @@ function touchNote(mx) {   // a touch plays the note under your finger (low on t
   playDeg(degFromX(mx), .08, d0 < .06 ? d0 : 0);
 }
 function studioSong(atT) { songStart({ id: 'studio', name: 'studio', style: studioStyle, bpm: STYLES[studioStyle].bpm, studio: true }, atT); }
-function enterRoom() { initAudio(); studio = false; room.resize(ROOM_R); state = 'room'; room.reset(480, 220); }
+function enterRoom() {
+  initAudio(); studio = false; room.resize(ROOM_R); state = 'room'; room.reset(480, 220);
+  if (!store.seenRoom) { store.seenRoom = true; persist(); say(isTouchUi() ? 'Tip: press to dent it, drag the skin to pull, hold still to pin' : 'Tip: click to dent it, drag the skin to pull, right-click to pin', 5); }   // a one-time hint, like the Studio's
+}
 function startStudio() {
   initAudio(); studio = true; state = 'room'; room.resize(STUDIO_R); room.reset(480, 262); setPreset('clay');
   studioShape = 0; studioFree = false; studioHold = 0; studioArmed = false; studioCel = 0; flow = 0; lastStudioStep = -1; studioSim = 0;
@@ -159,7 +162,10 @@ function nextShape() { studioShape = (studioShape + 1) % SHAPES.length; studioHo
 function completeShape() {
   const sh = SHAPES[studioShape], stars = studioSimAvg >= .93 ? 3 : studioSimAvg >= .88 ? 2 : 1;
   studioStars = stars; studioCel = 2.2; studioHold = 0; studioArmed = false;
+  const before = doneCount();
   if (stars > (store.studio.stars[sh.name] || 0)) { store.studio.stars[sh.name] = stars; persist(); }
+  const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];   // every 3 Studio stars count as a level: say so when that opens something
+  if (fresh.length) setTimeout(() => { sfx.unlock(); say('Unlocked: ' + fresh.join(', '), 4.5); }, 1500);
   [0, 2, 4, 7, 9, 12].forEach((d, i) => playDeg(d + 3, .07, i * .1)); buzz(30);
   for (let i = 0; i < 44; i++) spawn({ x: studioCx + (Math.random() - .5) * 300, y: studioCy - 140, vx: (Math.random() - .5) * 120, vy: 40 + Math.random() * 120, g: 60, type: 'conf', size: 5 + Math.random() * 4, rot: Math.random() * 6, vr: (Math.random() - .5) * 10, life: 3, max: 3, col: ['#ff6fb5', '#ffd1ec', '#c86bff', '#8fd8ff', '#fff3a8'][i % 5] });
 }

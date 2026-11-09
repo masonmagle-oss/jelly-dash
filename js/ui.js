@@ -198,7 +198,7 @@ function importSave() {
 }
 function resetProgress() {
   if (resetArm <= 0) { resetArm = 3; say('Tap again to reset your progress (levels you made are kept)', 3); return; }
-  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; persist(); say('Progress reset', 2.5);
+  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; persist(); say('Progress reset', 2.5);
 }
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
@@ -364,7 +364,9 @@ function overlays() {
   }
   if (toast.life > 0) {
     ctx.globalAlpha = clamp(toast.life * 2, 0, 1); ctx.fillStyle = 'rgba(80,20,90,.8)'; ctx.font = '700 20px Fredoka,sans-serif';
-    const tw = ctx.measureText(toast.t).width + 40; rr(W / 2 - tw / 2, 100, tw, 38, 19); ctx.fill(); txt(toast.t, W / 2, 119, 20, '#fff', null);   // toasts live under the HUD, clear of every result screen and the floor controls ctx.globalAlpha = 1;
+    // toasts live under the HUD, clear of every result screen and the floor controls (Studio's Flow card runs down to y 132, so there they sit just below it)
+    const tw = ctx.measureText(toast.t).width + 40, ty = state === 'room' && studio ? 142 : 100;
+    rr(W / 2 - tw / 2, ty, tw, 38, 19); ctx.fill(); txt(toast.t, W / 2, ty + 19, 20, '#fff', null); ctx.globalAlpha = 1;
   }
 }
 function drawStudioGhost() {   // dashed silhouette that follows the dough, rotated to the orientation that fits best
