@@ -345,7 +345,7 @@ function drawSoft(s, scroll, o = {}) {
   ctx.save();
   ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
   // squash/stretch about the feet applies to everything; the spin (tumble in the air) applies to the body only, so the face stays upright
-  const squash = () => { if (o.sy) { ctx.translate(cx, bb.maxy); ctx.scale(o.sx, o.sy); ctx.translate(-cx, -bb.maxy); } };
+  const squash = () => { if (o.sy) { ctx.translate(cx, bb.maxy); ctx.scale(o.sx, o.sy); if (o.sk) ctx.transform(1, 0, o.sk, 1, 0, 0); ctx.translate(-cx, -bb.maxy); } };   // sk: the sideways lean of the jelly's wobble (the top sways, the feet stay put)
   const spin = () => { if (o.rot) { ctx.translate(cx, bb.cy); ctx.rotate(o.rot); ctx.translate(-cx, -bb.cy); } };
   const gnd = o.ground, gdist = gnd - bb.maxy;
   if (gdist < 260) { ctx.fillStyle = `rgba(120,30,90,${.22 * clamp(1 - gdist / 260, 0, 1)})`; ctx.beginPath(); ctx.ellipse(cx, gnd + 4, w * .55, 5 + 2 * k, 0, 0, 7); ctx.fill(); }

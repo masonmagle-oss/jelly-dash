@@ -536,7 +536,7 @@ function draw() {
     if (ship) drawShipBack(scroll);
     const bb0 = jelly.bounds(), q = SQ_, px = bb0.cx - scroll, sy = 1 + q.s, sx = 1 / Math.sqrt(sy);
     if (!ship && !P.grounded && P.coy > 0 && P.ledgeX != null && bb0.cx > P.ledgeX + 3) drawStrand(scroll, bb0);
-    drawSoft(jelly, scroll, { rot: ship ? 0 : q.rot, sx: ship ? 1 : sx, sy: ship ? 1 : sy, ground: GY, alpha: ghost > 0 ? .45 + .2 * Math.sin(tg * 20) : 1, happy: state === 'win', open: (!P.grounded && P.vy < -100 && !ship) || (ship && inp.held) });
+    drawSoft(jelly, scroll, { rot: ship ? 0 : q.rot, sx: ship ? 1 : sx, sy: ship ? 1 : sy, sk: ship || reduceMotion() ? 0 : q.k, ground: GY, alpha: ghost > 0 ? .45 + .2 * Math.sin(tg * 20) : 1, happy: state === 'win', open: (!P.grounded && P.vy < -100 && !ship) || (ship && inp.held) });
     if (ship) drawShipFront(scroll);
   }
   ctx.restore();

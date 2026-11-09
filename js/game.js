@@ -40,7 +40,11 @@ const reduceMotion = () => SET().reduceMotion === null ? OS_REDUCE : SET().reduc
 function spawn(o) { if (simming) return; if (o.type !== 'txt' && reduceMotion() && Math.random() < .65) return; parts.push(Object.assign({ life: 1, max: 1, g: 0, vx: 0, vy: 0, size: 4, rot: 0, vr: 0, type: 'drop', col: '#fff' }, o)); }
 const jelly = new Soft(24, 23, 0, 0, GAMEBODY);
 // visual squash/stretch springs and the tumble in the air (drawn as a transform on top of the soft body, never affects the hitbox)
-const SQ_ = { s: 0, v: 0, rot: 0, rv: 0, was: true, lastVy: 0 };
+const SQ_ = { s: 0, v: 0, rot: 0, rv: 0, was: true, lastVy: 0, k: 0, kv: 0, pv: 0, pt: 0 };   // k, kv: the sideways wobble (a lean that rings back and forth after a landing or a takeoff); pv, pt: a takeoff stretch waiting its turn (it follows the landing squat by a few frames)
+let landEvt = 0;   // the fall speed of a landing (or a pad hit) that the squash spring has not been told about yet; the jelly squashes even when a held jump launches it again in the same step
+const stretchKick = v => { SQ_.pv += v; if (SQ_.pt <= 0) SQ_.pt = .07; };
+// how hard the squash spring is struck on landing, from the fall speed at the pace-neutral scale (vn = speed / K, so a level's tempo does not change how big a jump looks): a small drop is a nudge, a normal hop a clear squish, a pad or a long fall flattens the jelly to about half its height
+const landSquashV = vn => 1.6 + Math.pow(clamp(vn / 1250, 0, 1), 1.6) * 10;
 let tumble = SET().tumble;
 const ROOM_R = 52, STUDIO_R = 72;   // body radius in the Room, and in the Studio where it is the whole canvas (bigger = easier to grip and knead with a finger)
 const room = new Soft(36, ROOM_R, 480, 250, PRESETS.slime);
@@ -65,7 +69,7 @@ const say = (t, life = 2.5) => { toast = { t, life }; };
 /* ================= game flow ================= */
 function resetRun() {
   P.wx = 0; P.form = 'cube'; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
-  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = 0; SQ_.was = true; SQ_.lastVy = 0;
+  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = SQ_.k = SQ_.kv = SQ_.pv = SQ_.pt = 0; SQ_.was = true; SQ_.lastVy = 0; landEvt = 0;
   got = 0; hearts.forEach(h => h.got = false); orbs.forEach(o => { o.used = false; }); pads.forEach(p => { p.sq = 0; p.cool = 0; });
   inp.buf = 0; inp.pt = -1; shake = 0; ghost = 0; cps = []; pcp = []; hintI = 0; pAutoX = 12 * T; cpT = 0; combo = 0; tuneI = 0; lastBeat = -1; placeJelly(); snapPrev();
   clusters.forEach(c => { c.done = false; }); scoreNow = 0; judgeBase = 0; judgeN = 0; judged = { PERFECT: 0, GREAT: 0, GOOD: 0, OK: 0 };
@@ -203,9 +207,9 @@ function jumpFx() {
   P.vy = -JUMP; P.grounded = false; P.coy = 0; inp.buf = 0; inp.pt = -1;
   if (lag > 0 && lag < .035) { P.y += P.vy * lag + .5 * G * lag * lag; P.vy += G * lag; }
   if (simming) return;
-  jelly.kick(230, 80); SQ_.v += 4.2;   // takeoff: stretch tall
+  jelly.kick(230, 80); stretchKick(5.2);   // takeoff: stretch tall
   if (scramble) {   // the grace made visible: the jelly pushes off its own sticky strand
-    sfx.stick(); jelly.kick(120, 160); SQ_.v += 2;
+    sfx.stick(); jelly.kick(120, 160); stretchKick(2);
     for (let i = 0; i < 7; i++) spawn({ x: P.ledgeX, y: P.ledgeY - 2, vx: (Math.random() - .3) * 140, vy: -Math.random() * 120, g: 260, type: 'star', size: 3 + Math.random() * 3, life: .45, max: .45, col: '#fff' });
   }
   if (state === 'play' && pressed) judgeJump(tPress);   // only real presses are judged; auto-repeat hops from holding are neutral
@@ -217,7 +221,7 @@ const ORB_REACH = { x: 27, y: 31 };
 function orbBoost(o) {
   o.used = true; P.vy = -JUMP; P.grounded = false; P.coy = 0; inp.buf = 0; inp.pt = -1;
   if (simming) return;
-  jelly.kick(260, 90); SQ_.v += 4.4; sfx.orb(); ripple(o.x, o.y, 1);
+  jelly.kick(260, 90); stretchKick(6); sfx.orb(); ripple(o.x, o.y, 1);
   for (let i = 0; i < 10; i++) spawn({ x: o.x, y: o.y, vx: (Math.random() - .5) * 280, vy: (Math.random() - .5) * 280, g: 120, type: 'star', size: 3 + Math.random() * 4, life: .55, max: .55, col: i % 2 ? '#fff' : '#ffd75e' });
 }
 function ripple(x, y, power) { spawn({ type: 'ring', x, y, size: 30 + power * 50, life: .6, max: .6 }); }
@@ -244,6 +248,7 @@ function moveCube(dt, speed, lethal) {
   for (const s of solids) {
     if (R > s.x0 && L < s.x1 && P.vy >= 0 && prevB <= s.top + 14 && P.y + P.h >= s.top) { P.y = s.top - P.h; P.vy = 0; P.grounded = true; P.ledgeX = s.x1; P.ledgeY = s.top; break; }   // remember where the support ends: the sticky strand hangs from it
   }
+  if (P.grounded && !wasG && !simming) landEvt = Math.max(landEvt, impactVy);   // (the squash spring reads this)
   if (P.grounded && !wasG && impactVy > 220 && !simming && state === 'play') sfx.land(impactVy);   // a soft thump on landing
   // Zen protection: solid ground bridges any gap until you are clear of where you last fell
   if (!P.grounded && mode === 'zen' && ghost > 0 && P.vy >= 0 && P.y + P.h >= GY && prevB <= GY + 14) { P.y = GY - P.h; P.vy = 0; P.grounded = true; }
@@ -287,9 +292,9 @@ function stepPlayer(dt, speed, lethal) {
   for (const pd of pads) {
     pd.cool -= dt; pd.sq *= Math.pow(.02, dt);
     if (P.form === 'cube' && pd.cool <= 0 && R > pd.x + 4 && L < pd.x + T - 4 && P.vy >= 0 && P.y + P.h >= pd.base - 12 && P.y + P.h <= pd.base + 14) {
-      pd.cool = .3; pd.sq = 1; P.vy = -PAD; P.grounded = false; P.coy = 0;
+      const fall = P.vy; pd.cool = .3; pd.sq = 1; P.vy = -PAD; P.grounded = false; P.coy = 0;
       if (simming) continue;
-      jelly.kick(300, 110); SQ_.v += 5.2; sfx.pad();
+      landEvt = Math.max(landEvt, fall); jelly.kick(300, 110); stretchKick(7.2); sfx.pad();
       for (let i = 0; i < 12; i++) spawn({ x: pd.x + T / 2, y: pd.base - 6, vx: (Math.random() - .5) * 280, vy: -Math.random() * 300, g: 700, type: 'heart', size: 4 + Math.random() * 4, life: .7, max: .7, col: '#ff7ab8' });
     }
   }
@@ -317,16 +322,19 @@ function softAfterCore(dt, spd) {
   // squash & stretch spring, and a full tumble in the air that lands upright with a wobble
   {
     const q = SQ_;
-    if (ship || state !== 'play') { q.s *= .9; q.v *= .9; q.rot += (0 - q.rot) * .2; q.rv = 0; q.was = P.grounded; }
+    if (ship || state !== 'play') { q.s *= .9; q.v *= .9; q.k *= .9; q.kv *= .9; q.rot += (0 - q.rot) * .2; q.rv = 0; q.was = P.grounded; q.pv = q.pt = 0; landEvt = 0; }
     else {
-      if (P.grounded && !q.was && q.lastVy > 250) q.v -= clamp(q.lastVy / 220, 1.5, 5.5);   // landing: squash by how hard it came in
+      if (landEvt / K > 220) { const lv = landSquashV(landEvt / K); q.v -= lv; jelly.kick(lv * 40, -lv * 22); q.kv += (q.kv > 0 ? -1 : 1) * lv * .9; }   // landing: squash by how far it fell, so a big jump (a pad, an orb, a long drop) flattens it much more than a hop; the skin splats sideways and jiggles
+      landEvt = 0;
+      if (q.pt > 0 && (q.pt -= dt) <= 0) { q.v += q.pv; q.pv = 0; }   // the takeoff stretch comes a beat after the squat
       q.was = P.grounded; q.lastVy = P.vy;
-      q.v += (-380 * q.s - 16 * q.v) * dt; q.s = clamp(q.s + q.v * dt, -.3, .3);
+      q.kv += (-3600 * q.k - 7 * q.kv) * dt; q.k = clamp(q.k + q.kv * dt, -.3, .3);   // the lean rings at about 9 Hz and fades in a third of a second
+      q.v += (-380 * q.s - 11 * q.v) * dt; q.s = clamp(q.s + q.v * dt, -.5, .34);   // a springier spring (less damping): it bounces back past round a few times
       if (!P.grounded && tumble && !reduceMotion()) { q.rot += Math.PI * G / JUMP * dt; q.rv = 0; }
       else { q.rot -= Math.round(q.rot / (Math.PI * 2)) * Math.PI * 2; q.rv += (-300 * q.rot - 18 * q.rv) * dt; q.rot += q.rv * dt; if (Math.abs(q.rot) < 1e-3 && Math.abs(q.rv) < .01) q.rot = q.rv = 0; }   // whole turns are forgotten on landing; what is left wobbles back to upright
     }
   }
-  if (jelly.impact > 380) jelly.soak(clamp(1 - (jelly.impact - 300) / 900, .2, .6));   // the harder the landing, the more of the skin's remaining speed is bled off
+  if (jelly.impact > 380) jelly.soak(clamp(1 - (jelly.impact - 300) / 1100, .3, .72));   // the harder the landing, the more of the skin's remaining speed is bled off
   if (jelly.impact > 150 && tg - lastSq > .09) {
     lastSq = tg; sfx.squish(jelly.impact);
     const bb = jelly.bb; ripple(bb.cx, bb.maxy + 2, clamp(jelly.impact / 1100, 0, 1));

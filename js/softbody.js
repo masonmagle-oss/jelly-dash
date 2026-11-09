@@ -159,7 +159,7 @@ const PRESETS = {
   foam: { name: 'Foam', kp: 420, ke: .88, ks: .12, ksk: .16, damp: .978, mu: .9, e: 0, flow: 3.2, yield: .035, recover: .85 },
 };
 // the in-level jelly keeps its form: stiffer, better damped, with shape memory (form) and a hard radius band so it can never collapse or over-stretch
-const GAMEBODY = { name: 'game', kp: 2600, ke: .96, ks: .12, ksk: .4, damp: .984, mu: .03, e: .1, form: .11, minR: .78, maxR: 1.32 };
+const GAMEBODY = { name: 'game', kp: 2600, ke: .96, ks: .12, ksk: .4, damp: .993, mu: .03, e: .1, form: .05, minR: .78, maxR: 1.32 };   // (a little less damping and weaker shape memory than before: the skin keeps quivering after a landing)
 
 const noCollide = () => false;
 function resolveWorld(x, y) {
