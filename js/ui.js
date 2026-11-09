@@ -198,7 +198,7 @@ function importSave() {
 }
 function resetProgress() {
   if (resetArm <= 0) { resetArm = 3; say('Tap again to reset your progress (levels you made are kept)', 3); return; }
-  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; persist(); say('Progress reset', 2.5);
+  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; persist(); say('Progress reset', 2.5);
 }
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
@@ -362,7 +362,7 @@ function overlays() {
     if (winT > 1.2) txt(testing ? 'tap to return to the editor' : 'tap to continue', W / 2, 390, 22, '#fff', C.plum);
     ctx.globalAlpha = 1;
   }
-  if (toast.life > 0) {
+  if (toast.life > 0 && roomPanel !== 'goals') {   // (not over the goals card: its first row sits where toasts do)
     ctx.globalAlpha = clamp(toast.life * 2, 0, 1); ctx.fillStyle = 'rgba(80,20,90,.8)'; ctx.font = '700 20px Fredoka,sans-serif';
     // toasts live under the HUD, clear of every result screen and the floor controls (Studio's Flow card runs down to y 132, so there they sit just below it)
     const tw = ctx.measureText(toast.t).width + 40, ty = state === 'room' && studio ? 142 : 100;
@@ -444,6 +444,7 @@ function drawRoom() {
   const liveUi = ui; if (roomPanel) ui = [];   // while a picker is open the floor is dimmed and cannot be pressed
   if (studio) drawStudioUI();
   floorBar();
+  if (!studio) btn('★ ' + goalsDone() + '/' + GOALS.length, RM.l + 8, RM.t + 8, 116, 42, () => { roomPanel = 'goals'; sfx.panel(true); }, { size: 16, r: 14 });   // the goals card (drawGoals)
   ui = liveUi;
   txt(studio ? 'Squish Studio' : PRESETS[roomPreset].name, W / 2, 28, 24, '#fff', C.plum);
   txt(studio ? (isTouchUi() ? 'knead the dough to match the dotted outline  •  hold = pin' : 'knead the dough to match the dotted outline  •  drag = pull  •  press = dent  •  right-click = pin') : isTouchUi() ? 'drag = pull  •  press = dent  •  hold = pin' : 'press inside = dent  •  drag the skin = pull  •  right-click = pin  •  space = hop  •  R reset  •  Esc menu', W / 2, 520, TS.small, '#fff', C.plum);
@@ -466,8 +467,29 @@ function floorBar() {
   let x = 10; for (const [label, w, fn, o] of left) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
   x = W - 10 - right.reduce((n, it) => n + it[1] + gap, -gap); for (const [label, w, fn, o] of right) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
 }
+// the Squish Room goals: a checklist with no pressure, and the cozy-days count
+function drawGoals() {
+  const g = goalStore(), cols = 2, cw = 300, rh = 42, rows = Math.ceil(GOALS.length / cols), pw = cols * cw + 40, ph = 62 + rows * rh + 76 + 66, px = (W - pw) / 2, py = (H - ph) / 2 - 6;
+  const close = () => { roomPanel = null; sfx.panel(false); };
+  ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
+  ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
+  ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });   // taps on the card itself do nothing
+  txt('Squish goals', W / 2, py + 34, 26, C.pink, null);
+  GOALS.forEach((it, i) => {
+    const x = px + 20 + (i % cols) * cw, y = py + 62 + Math.floor(i / cols) * rh, done = !!g.done[it.id], mid = y + (rh - 6) / 2;
+    ctx.fillStyle = done ? 'rgba(255,214,236,.9)' : 'rgba(245,235,250,.8)'; rr(x + 4, y, cw - 8, rh - 6, 14); ctx.fill();
+    ctx.fillStyle = done ? C.hot : 'rgba(200,160,220,.45)'; ctx.beginPath(); ctx.arc(x + 26, mid, 11, 0, 7); ctx.fill();
+    if (done) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + 20, mid); ctx.lineTo(x + 25, mid + 5); ctx.lineTo(x + 33, mid - 5); ctx.stroke(); }
+    txt(it.name, x + 46, y + 11, 16, done ? '#b03a82' : C.plum, null, 'left'); txt(it.hint(), x + 46, y + 27, 12, C.mauve, null, 'left');
+  });
+  const fy = py + 62 + rows * rh + 14;
+  txt('Cozy days: ' + g.cozyDays + (g.streak > 1 ? '  •  ' + g.streak + ' in a row' : ''), W / 2, fy, 20, C.pink, null);
+  txt(goalsDone() + ' of ' + GOALS.length + ' goals  •  every 3 count as a level toward new skins', W / 2, fy + 28, 14, C.mauve, null);
+  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+}
 // a big, finger-sized chooser for jelly skins and hazard looks (locked ones say what unlocks them)
 function drawPicker() {
+  if (roomPanel === 'goals') { drawGoals(); return; }
   const isSk = roomPanel === 'skins', items = isSk ? SKINS : HAZ, cols = isSk ? 3 : 5, cw = 128, ch = 136, rows = Math.ceil(items.length / cols);
   const pw = cols * cw + 40, ph = rows * ch + 134, px = (W - pw) / 2, py = (H - ph) / 2 - 6, close = () => { roomPanel = null; sfx.panel(false); };
   ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
@@ -490,7 +512,7 @@ function drawPicker() {
     txt(it.name, cx, top + 92, 15, open ? '#b03a82' : '#9a86a8', null);
     const sub = !open ? `beat ${it.need} level${it.need > 1 ? 's' : ''}` : (it.note || '');
     if (sub) txt(sub, cx, top + 112, 12, C.mauve, null);
-    ui.push({ x: cx - cw / 2 + 4, y: top, w: cw - 8, h: ch - 12, fn: () => { if (open) { if (isSk) store.skin = i; else store.haz = i; persist(); roomPanel = null; sfx.click(); } else { sfx.error(); say(`Beat ${it.need} level${it.need > 1 ? 's' : ''} to unlock ${it.name}`); } } });
+    ui.push({ x: cx - cw / 2 + 4, y: top, w: cw - 8, h: ch - 12, fn: () => { if (open) { if (isSk) { if ((store.skin | 0) !== i) goalDone('skin'); store.skin = i; } else store.haz = i; persist(); roomPanel = null; sfx.click(); } else { sfx.error(); say(`Beat ${it.need} level${it.need > 1 ? 's' : ''} to unlock ${it.name}`); } } });
   });
   btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
 }

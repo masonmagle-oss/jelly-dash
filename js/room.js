@@ -28,8 +28,12 @@ function roomStep(dt) {
   const bb = room.bounds(), el = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / (2 * room.R) - 1;
   if (room.grabs.some(g => !g.pin)) setSqueak(260 + clamp(el, 0, 1.2) * 340, clamp(Math.abs(el - roomElong) / dt * .012 + el * .012, 0, .07)); else setSqueak(260, 0);
   roomElong = el;
+  if (!studio) goalsStep(dt, el);
 }
-function roomHop() { if (roomHopT > 0) return; roomHopT = .18; room.push(0, -760); room.kick(380, 160); sfx.jump(); }
+function roomHop() {
+  if (roomHopT > 0) return; roomHopT = .18; room.push(0, -760); room.kick(380, 160); sfx.jump();
+  if (!studio && ++goalStore().hops >= 10) goalDone('hop');
+}
 function pointInBody(mx, my) {
   let c = false; const n = room.n, x = room.x, y = room.y;
   for (let i = 0, j = n - 1; i < n; j = i++) if ((y[i] > my) !== (y[j] > my) && mx < (x[j] - x[i]) * (my - y[i]) / (y[j] - y[i]) + x[i]) c = !c;
@@ -42,7 +46,9 @@ function roomPin(mx, my) {
   const it = [];
   for (let i = 0; i < room.n; i++) { const d = Math.hypot(room.x[i] - mx, room.y[i] - my); if (d < 80 * roomScale()) it.push({ i, d, dx: room.x[i] - mx, dy: room.y[i] - my }); }
   if (!it.length) return false;
-  it.sort((a, b) => a.d - b.d); room.grabs.push({ id: 'pin' + Math.random(), pin: true, mx, my, items: it.slice(0, 5) }); sfx.poke(); buzz(10); return true;
+  it.sort((a, b) => a.d - b.d); room.grabs.push({ id: 'pin' + Math.random(), pin: true, mx, my, items: it.slice(0, 5) }); sfx.poke(); buzz(10);
+  if (!studio) goalDone('pin');
+  return true;
 }
 // press in the middle = a finger that dents it; press near the skin = grab and pull; right-click = pin a spot so you can stretch strings
 function roomDown(id, mx, my, button) {
@@ -55,13 +61,16 @@ function roomDown(id, mx, my, button) {
   const kr = roomScale();
   if (inside && items[0].d > 24 * kr) {
     const sx = room.x[items[0].i], sy = room.y[items[0].i];   // the finger first touches the skin, then presses in toward the pointer
-    room.inds.push({ id, x: sx, y: sy, tx: mx, ty: my, r: 28 * kr, cx: sx, cy: sy }); sfx.poke(); buzz(8); return;
+    room.inds.push({ id, x: sx, y: sy, tx: mx, ty: my, r: 28 * kr, cx: sx, cy: sy }); sfx.poke(); buzz(8);
+    if (!studio) goalDone('dent');
+    return;
   }
   if (!inside && items[0].d > 64 * kr) return;
   const taken = new Set(); room.grabs.forEach(g => g.items.forEach(it => taken.add(it.i)));
   const it = items.filter(o => o.d < 64 * kr && !taken.has(o.i)).slice(0, 7).map(o => ({ i: o.i, dx: room.x[o.i] - mx, dy: room.y[o.i] - my }));
   if (!it.length) return;
   room.grabs.push({ id, mx, my, items: it }); sfx.poke(); buzz(6);
+  if (!studio) goalDone('pull');
 }
 function roomMove(id, mx, my) {
   mx = clamp(mx, RM.l, RM.r); my = clamp(my, RM.t, RM.b);
@@ -72,9 +81,62 @@ function roomRelease(id, quiet) {
   const had = room.grabs.some(g => !g.pin && (id == null || g.id === id));
   room.grabs = room.grabs.filter(g => g.pin || !(id == null || g.id === id));
   room.inds = room.inds.filter(d => !(id == null || d.id === id));
-  if (had && !quiet) { sfx.bloop(clamp(roomElong, 0, 1.5)); buzz(10); }
+  if (had && !quiet) { sfx.bloop(clamp(roomElong, 0, 1.5)); buzz(10); if (!studio && roomElong > .6) goalDone('boing'); }
 }
-function setPreset(k) { roomPreset = k; room.prm = PRESETS[k]; room.relax(); sfx.bloop(k === 'jelly' ? 1 : k === 'mochi' || k === 'dough' || k === 'foam' ? -1 : 0); }
+function setPreset(k) { roomPreset = k; room.prm = PRESETS[k]; room.relax(); sfx.bloop(k === 'jelly' ? 1 : k === 'mochi' || k === 'dough' || k === 'foam' ? -1 : 0); if (state === 'room' && !studio) goalMat(k); }
+
+/* ================= Squish Room goals =================
+   Soft things to try, with no timers and no way to fail. Each ticks off once, for good (store.goals.done). Every 3 goals count as one more "level" toward
+   skins and hazards, like Studio stars (doneCount in render.js). "Cozy days" counts the days you spent a minute in the room; it only ever goes up. */
+const GOALS = [
+  { id: 'dent', name: 'Poke it', hint: () => 'press the middle of the jelly' },
+  { id: 'pull', name: 'Pull its skin', hint: () => 'drag the edge outward' },
+  { id: 'stretch', name: 'Big stretch', hint: () => 'pull it way out long' },
+  { id: 'boing', name: 'Boing!', hint: () => 'let go of a big stretch' },
+  { id: 'pin', name: 'Pin a spot', hint: () => isTouchUi() ? 'hold still on the skin' : 'right-click the skin' },
+  { id: 'string', name: 'Stretch a string', hint: () => 'pin one spot, pull another' },
+  { id: 'hop', name: 'Ten hops', hint: () => 'tap Hop ten times' },
+  { id: 'mats', name: 'Try every material', hint: () => 'Jelly, Slime, Mochi, Dough, Foam' },
+  { id: 'skin', name: 'New look', hint: () => 'pick a different skin' },
+  { id: 'rest', name: 'Let it settle', hint: () => 'squish it, then leave it alone' },
+  { id: 'cozy', name: 'A cozy minute', hint: () => 'spend a minute in the room' },
+];
+const ROOM_MATS = ['jelly', 'slime', 'mochi', 'dough', 'foam'];
+let roomTouched = false, lastGoalSave = 0;
+const goalStore = () => store.goals || (store.goals = { done: {}, mats: {}, hops: 0, secs: 0, day: '', daySecs: 0, cozyDays: 0, streak: 0, lastCozy: '' });
+const goalsDone = () => GOALS.filter(g => goalStore().done[g.id]).length;
+const dayKey = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const dayBefore = k => dayKey(new Date(new Date(k + 'T12:00:00').getTime() - 864e5));
+function unlockNote(before) {   // say so when the progress count just opened a skin or a hazard (the same message as finishing a level)
+  const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];
+  if (fresh.length) setTimeout(() => { sfx.unlock(); say('Unlocked: ' + fresh.join(', '), 4.5); }, 1500);
+}
+function goalDone(id) {
+  const g = goalStore(); if (g.done[id]) return;
+  const before = doneCount(); g.done[id] = 1; persist();
+  say('Goal: ' + GOALS.find(x => x.id === id).name + ' ✓', 3); [0, 4, 7].forEach((d, i) => playDeg(d + 3, .06, i * .09)); buzz(14);
+  unlockNote(before);
+}
+function goalMat(k) { const g = goalStore(); g.mats[k] = 1; if (ROOM_MATS.every(m => g.mats[m])) goalDone('mats'); }
+function cozyTick(dt, today = dayKey()) {   // time in the room: a cozy minute (ever) and a cozy day (a minute today)
+  const g = goalStore();
+  if (g.day !== today) { g.day = today; g.daySecs = 0; }
+  g.secs += dt; g.daySecs += dt;
+  if (g.secs >= 60) goalDone('cozy');
+  if (g.daySecs >= 60 && g.lastCozy !== today) {
+    g.streak = g.lastCozy === dayBefore(today) ? g.streak + 1 : 1; g.cozyDays++; g.lastCozy = today; persist();
+    say(g.streak > 1 ? 'Cozy day! ' + g.streak + ' in a row' : 'Cozy day! See you tomorrow', 3.5);
+  }
+  if (tg - lastGoalSave > 10) { lastGoalSave = tg; persist(); }
+}
+function goalsStep(dt, el) {   // el: how far the body is stretched (0 = round, 1 = twice as long)
+  const pulling = room.grabs.some(q => !q.pin), pinned = room.grabs.some(q => q.pin);
+  if (pulling && el > .8) goalDone('stretch');
+  if (pulling && pinned && el > .5) goalDone('string');
+  if (room.grabs.length || room.inds.length || room.deform > 80) roomTouched = true;
+  if (roomTouched && roomIdle > 4) { roomTouched = false; goalDone('rest'); }
+  if (roomIdle < 15) cozyTick(dt);   // only while something is happening: an open tab left alone does not count
+}
 
 /* ================= Squish Studio =================
    Knead the dough into silhouettes (a ghost outline follows the dough). The shape score casts rays from the dough's
@@ -149,7 +211,7 @@ function touchNote(mx) {   // a touch plays the note under your finger (low on t
 }
 function studioSong(atT) { songStart({ id: 'studio', name: 'studio', style: studioStyle, bpm: STYLES[studioStyle].bpm, studio: true }, atT); }
 function enterRoom() {
-  initAudio(); studio = false; room.resize(ROOM_R); state = 'room'; room.reset(480, 220);
+  initAudio(); studio = false; room.resize(ROOM_R); state = 'room'; room.reset(480, 220); roomTouched = false; goalMat(roomPreset);
   if (!store.seenRoom) { store.seenRoom = true; persist(); say(isTouchUi() ? 'Tip: press to dent it, drag the skin to pull, hold still to pin' : 'Tip: click to dent it, drag the skin to pull, right-click to pin', 5); }   // a one-time hint, like the Studio's
 }
 function startStudio() {
@@ -164,8 +226,7 @@ function completeShape() {
   studioStars = stars; studioCel = 2.2; studioHold = 0; studioArmed = false;
   const before = doneCount();
   if (stars > (store.studio.stars[sh.name] || 0)) { store.studio.stars[sh.name] = stars; persist(); }
-  const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];   // every 3 Studio stars count as a level: say so when that opens something
-  if (fresh.length) setTimeout(() => { sfx.unlock(); say('Unlocked: ' + fresh.join(', '), 4.5); }, 1500);
+  unlockNote(before);   // every 3 Studio stars count as a level: say so when that opens something
   [0, 2, 4, 7, 9, 12].forEach((d, i) => playDeg(d + 3, .07, i * .1)); buzz(30);
   for (let i = 0; i < 44; i++) spawn({ x: studioCx + (Math.random() - .5) * 300, y: studioCy - 140, vx: (Math.random() - .5) * 120, vy: 40 + Math.random() * 120, g: 60, type: 'conf', size: 5 + Math.random() * 4, rot: Math.random() * 6, vr: (Math.random() - .5) * 10, life: 3, max: 3, col: ['#ff6fb5', '#ffd1ec', '#c86bff', '#8fd8ff', '#fff3a8'][i % 5] });
 }

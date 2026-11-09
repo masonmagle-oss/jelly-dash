@@ -13,6 +13,8 @@ function normalizeStore(raw) {
   st.custom = Array.isArray(r.custom) ? r.custom.filter(l => isObj(l) && Array.isArray(l.objs)) : [];
   for (const k of ['best', 'score', 'rate']) if (!isObj(st[k])) st[k] = {};
   st.studio = isObj(r.studio) ? r.studio : {}; st.studio.stars = isObj(st.studio.stars) ? st.studio.stars : {};
+  const gl = isObj(r.goals) ? r.goals : {}, cnt = (v, d = 0) => Math.max(0, Math.floor(num(v, d))), txtOf = v => typeof v === 'string' && v.length <= 12 ? v : '';   // the Squish Room goals (room.js)
+  st.goals = { done: isObj(gl.done) ? gl.done : {}, mats: isObj(gl.mats) ? gl.mats : {}, hops: cnt(gl.hops), secs: Math.max(0, num(gl.secs, 0)), day: txtOf(gl.day), daySecs: Math.max(0, num(gl.daySecs, 0)), cozyDays: cnt(gl.cozyDays), streak: cnt(gl.streak), lastCozy: txtOf(gl.lastCozy) };
   st.pace = num(st.pace, 1) > 0 ? num(st.pace, 1) : 1; st.haz = Math.max(0, Math.floor(num(st.haz, 0))); st.skin = Math.max(0, Math.floor(num(st.skin, 0)));
   const sv = isObj(r.set) ? r.set : {}; st.set = Object.assign({}, DEFAULT_SET, sv);
   st.set.music = clamp(num(sv.music, DEFAULT_SET.music), 0, 1); st.set.sfx = clamp(num(sv.sfx, DEFAULT_SET.sfx), 0, 1);

@@ -331,8 +331,8 @@ const SKINS = [
   { name: 'Lilac Dream', g: ['#f3e8ff', '#cba8ff', '#9a6bff'], rim: '#7a45d6', bub: 5, glit: 1, gcol: '#ffd6f5', need: 5 },
   { name: 'Galaxy', g: ['#c8b5ff', '#8465f0', '#4b30b8'], rim: '#a98bff', bub: 2, glit: 1.6, gcol: '#ffffff', need: 8 },
 ];
-// skins unlock by beating official levels; every 3 Studio stars counts as one more level
-const doneCount = () => OFFICIAL.filter(l => !l.tutorial && (store.best[l.id] || 0) >= 100).length + Math.floor(Object.values(store.studio.stars).reduce((a, b) => a + b, 0) / 3);
+// skins unlock by beating official levels; every 3 Studio stars or Squish Room goals counts as one more level
+const doneCount = () => OFFICIAL.filter(l => !l.tutorial && (store.best[l.id] || 0) >= 100).length + Math.floor((Object.values(store.studio.stars).reduce((a, b) => a + b, 0) + goalsDone()) / 3);
 const skinOpen = i => doneCount() >= SKINS[i].need;
 const curSkin = () => { const i = store.skin | 0; return SKINS[i] && skinOpen(i) ? SKINS[i] : SKINS[0]; };
 function drawSoft(s, scroll, o = {}) {
