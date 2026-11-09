@@ -74,7 +74,7 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
     x = Math.ceil(x / TPB) * TPB;   // every pattern starts on a beat
   }
   alignSpikes(objs);
-  const L = { id, name, stars, pal, len: x + 2, objs, bpm, style, auto, coy };
+  const L = { id, name, stars, pal, len: x + 2, objs, bpm, style, auto, coy, script };   // script: kept so the tests can measure how hard each level is (see "difficulty ramp" in tests/suite.js)
   if (hints.length) L.hints = hints; if (extra && extra.tutorial) L.tutorial = true;
   return L;
 }
@@ -82,21 +82,23 @@ const OFFICIAL = [
   // [name, difficulty, palette, script, bpm, song style, hold-to-hop?, coyote seconds]  (coyote: see DEF_COY; the solver proves each level at its value)
   // Patterns climb a measured ladder of safe jump windows (at 112 BPM): s1 350 ms, s2 217, g4 267, gs3x 150-333, ss2x 183-217, g5 133, ss121 133, s3/ss321/ss331 83.
   // The first two levels let you hold to keep hopping; from level 3 every hop is its own tap. Pads are no longer free passes: they chain into hops.
+  // The levels are a ramp: tempo never drops from one level to the next, and the "pressure" score (hazards per second, each weighted by how narrow its window is;
+  // see pressureOf in tests/suite.js) rises by at least a notch every level, from First Hop to Slime Queen. The suite fails if a change breaks that.
   ['First Hop', 1, [0, 1, 2], 's1 s1 s2 s1 b21 s2 s1 s2 b21 s2 g2 s1', 100, 0, true, .04],
-  ['Candy Steps', 1, [2, 0, 1], 'b21 s2 stairs s1 b32 s2 stairs b21 s2 bsp s2 stairs g3 s2', 104, 4, true, .04],
-  ['Jelly Bounce', 2, [1, 4, 0], 'pad s2 pad ss232 pad gs32 g4 pad bsp pad gs32 pad ss212 g4 pad dbl', 108, 2, false, .05],
-  ['Gap Year', 2, [3, 1, 4], 'g3 s1 g4 g3 ss212 g4 gs33 s3 g4 gs32 dbl g5 s2 g3', 110, 3, false, .06],
-  ['Little Ship', 2, [4, 0, 2], 's2 s1 ship:22222 rest ss232 s2 ship:12321 rest s2 ss212 gs31 s1 gs32', 105, 4, false, .05],
-  ['Sugar Rush', 3, [2, 5, 3], 's2 dbl g4 ss232 stairs gs32 pad bsp g4 ss212 stairs s3 pad gs31 g5 s2 dbl s3', 116, 0, false, .06],
-  ['Bubble Tea', 3, [3, 4, 5], 'pad ss212 pad bsp gs32 pad s3 pad stairs g4 pad ss232 gs31 pad b32 g5 pad ss321 s2 gs31', 112, 2, false, .07],
-  ['Cloud Nine', 3, [1, 3, 0], 's1 ship:21232 rest ss232 ship:34121 rest s2 gs32 ship:2102034 rest s2 gs31 ss212 s3 gs31', 108, 4, false, .05],
-  ['Sparkle Storm', 4, [5, 4, 1], 'ss232 dbl s3 ss232 stairs ss212 g5 ss121 s2 bsp dbl gs32 pad ss212 gs32 s3 g4', 122, 1, false, .06],
-  ['Heartbreaker', 4, [0, 5, 4], 's3 g4 ss212 stairs pad bsp ship:1304031 rest ss232 gs32 ss212 pad stairs b32 s3 ss232 g5 ship:2040402 rest gs32 ss321', 118, 3, false, .07],
-  ['Moonlit Mochi', 4, [4, 3, 1], 'pad ss321 ship:2231320413 rest b21 gs31 stairs ss331 ship:3120413024 rest pad bsp g5 ss321 s3', 100, 5, false, .07],
-  ['Slime Queen', 5, [0, 4, 5, 2], 's3 dbl stairs pad ship:2130421 rest gs32 ss232 bsp dbl pad b32 stairs ship:0413024310 rest ss212 g4 ss232 s2 pad bsp ship:2113204 rest stairs ss232 gs32 pad ss212 s3 b32 dbl g5', 125, 1, false, .09],
+  ['Candy Steps', 1, [2, 0, 1], 'b21 s2 stairs s1 b32 s2 stairs b21 s2 bsp s2 stairs g3 s2', 102, 4, true, .04],
+  ['Jelly Bounce', 2, [1, 4, 0], 'pad s2 padh ss232 pad gs32 g4 padh bsp pad gs32 padh ss212 g4 pad dbl', 106, 2, false, .05],
+  ['Gap Year', 2, [3, 1, 4], 'g3 s2 g4 ss232 ss212 g4 gs33 s2 g4 gs32 dbl g4 s2 ss212', 108, 3, false, .06],
+  ['Little Ship', 2, [4, 0, 2], 'ss212 ss232 ship:21312 ss232 ss212 ship:13231 ss212 s2 gs31 ss232 gs32', 110, 4, false, .05],
+  ['Sugar Rush', 3, [2, 5, 3], 's2 dbl g4 ss232 stairs gs32 pad ss232 g4 ss212 stairs s3 pad gs31 g4 s3 dbl s2', 116, 0, false, .06],
+  ['Bubble Tea', 3, [3, 4, 5], 'padh ss212 pad ss232 gs32 padh s3 pad stairs g4 padh ss232 gs31 pad ss232 g4 padh ss321 s2 gs31', 116, 2, false, .07],
+  ['Cloud Nine', 3, [1, 3, 0], 'ss212 ship:30413 ss232 ship:34021 ss232 gs32 ship:3102034 ss212 ss232 gs31 ss232 ss212 gs31', 112, 4, false, .05],
+  ['Sparkle Storm', 4, [5, 4, 1], 'ss232 dbl s3 ss232 stairs ss212 g5 ss121 s2 bsp dbl gs32 pad ss212 gs32 s3 g4', 116, 1, false, .06],
+  ['Heartbreaker', 4, [0, 5, 4], 's2 g4 ss212 stairs padh ss232 ship:1304031 ss232 gs32 ss212 padh stairs gs32 s3 ss232 g5 ship:2040402 gs32 ss321', 122, 3, false, .07],
+  ['Moonlit Mochi', 4, [4, 3, 1], 'padh ss321 ship:2231320413 ss232 ss232 gs31 stairs ss331 ship:3120413024 padh ss232 g5 ss321 s3', 124, 5, false, .07],
+  ['Slime Queen', 5, [0, 4, 5, 2], 's3 dbl stairs padh ship:2130421 gs32 ss232 ss321 dbl padh ss232 stairs ship:0413024310 ss212 g4 ss232 ss321 padh ss321 ship:2113204 stairs ss232 gs32 padh ss212 s3 ss232 dbl g5 ss331', 130, 1, false, .09],
   // jump orbs (appended, so every saved id stays valid; slotted into the difficulty order just below)
-  ['Orb Orchard', 3, [3, 0, 2], 's2 og6 s1 os5 b32 og6 stairs ss212 os5 og7 pad os6 g3 og6 gs32 os5', 108, 2, false, .05],
-  ['Orbital', 4, [1, 5, 4], 'og7 ss232 os6 stairs og6 pad os5 ship:2130 rest og7 gs32 os6 ss321 og6 s3 os6 og7 ss212 os5', 118, 1, false, .06],
+  ['Orb Orchard', 3, [3, 0, 2], 'ss212 og6 ss212 os5 b32 og6 stairs ss232 os5 og7 padh os6 g4 og6 gs32 os5', 112, 2, false, .05],
+  ['Orbital', 4, [1, 5, 4], 'og7 ss232 os6 ss321 og6 padh os5 ship:20413 ss321 og7 gs32 os6 ss321 og6 s3 os6 ss331 og7 ss212 os5', 122, 1, false, .06],
   // the first-run tutorial: slow, forgiving, and every new idea arrives with a tip just before it
   ['Welcome', 1, [0, 1, 3], 'h0 rest h1 s1 s1 h2 s2 h3 g3 h4 b21 s1 h5 padh h6 og5 h7 s1 rest', 92, 4, true, .09, { tutorial: true, hints: [
     'Tap anywhere to jump over the gumdrops!', 'Hearts are bonus points — grab a few', 'Hold the screen to keep hopping', 'Gaps: jump just before the edge — you get a tiny grace after it',
@@ -109,10 +111,8 @@ moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('
    [x, y] in level units. The test suite re-runs the search,
    so if a level script or the jump physics change, it fails until this list is regenerated (each level's `missed` list from heartsSync). */
 const UNREACHABLE_HEARTS = {
-  'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1]], 'Orb Orchard': [[133, 3.6]], 'Sugar Rush': [[99, 1], [157, 3.6]],
-  'Bubble Tea': [[55, 1], [101, 3.6], [205, 3.6], [45, 3.6], [81, 3.6], [137, 3.6], [173, 3.6]],
-  'Sparkle Storm': [[97, 2.2], [119, 1], [95, 1.4]], 'Orbital': [[160, 1.8]], 'Heartbreaker': [[75, 1]], 'Moonlit Mochi': [[281, 3.6], [291, 1]],
-  'Slime Queen': [[163, 1], [361, 3.6], [371, 1], [460, 2], [519, 1.2]],
+  'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1]], 'Sugar Rush': [[157, 3.6]], 'Bubble Tea': [[101, 3.6]],
+  'Sparkle Storm': [[97, 2.2], [119, 1], [99, 2.2]], 'Orbital': [[82, 3.8], [254, 2.2]], 'Moonlit Mochi': [[178, 2.2]], 'Slime Queen': [[546, 2.2]],
 };
 for (const L of OFFICIAL) { const drop = UNREACHABLE_HEARTS[L.name]; if (drop) L.objs = L.objs.filter(o => o.t !== 'heart' || !drop.some(([x, y]) => Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002)); }
 /* ---------- worlds ----------
