@@ -113,6 +113,41 @@
       ok(pdb >= J.SFX_TARGET[k] - 3.2 || hdb >= J.SFX_HF_CEIL - 1.5, k + ' is ' + pdb.toFixed(1) + ' dBFS, well under its target ' + J.SFX_TARGET[k] + ' (re-run the calibration)');
     }
   }, { slow: true });
+  test('jelly sounds: ten wet squish voices (and several for hops, landings and pads) that never repeat back to back, each at its own level', async () => {
+    const banks = { squish: SQUISH_VOICES, land: LAND_VOICES, jump: JUMP_VOICES, pad: PAD_VOICES };
+    ok(SQUISH_VOICES.length >= 10, 'ten squish voices, not ' + SQUISH_VOICES.length); ok(LAND_VOICES.length >= 5 && JUMP_VOICES.length >= 5 && PAD_VOICES.length >= 3, 'a few voices for landings, hops and pads');
+    for (const k of Object.keys(banks)) eq(VOICE_GAIN[k].length, banks[k].length, k + ' has a gain for every voice');
+    for (const k of Object.keys(banks)) {   // a long run: all voices get used, and no voice comes back until two others have played
+      const n = banks[k].length, seen = new Set(), run = []; for (let i = 0; i < 400; i++) { const v = pickVoice(k, n); seen.add(v); run.push(v); }
+      eq(seen.size, n, k + ' uses every voice'); ok(run.every((v, i) => i < 2 || (v !== run[i - 1] && v !== run[i - 2])), k + ' repeats a voice too soon');
+    }
+    const args = { squish: [600, 'jelly'], land: [600], jump: [], pad: [] };
+    try {
+      for (const k of Object.keys(banks)) for (let v = 0; v < banks[k].length; v++) {
+        forceVoice = v; let peak = 0; const buf = await J.renderSfxOffline(() => J.sfx[k](...args[k]), 2);
+        for (const c of [0, 1]) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { ok(Number.isFinite(d[i]), k + ' voice ' + v + ' non-finite'); if (Math.abs(d[i]) > peak) peak = Math.abs(d[i]); } }
+        const pdb = 20 * Math.log10(peak + 1e-12); ok(pdb > -60, k + ' voice ' + v + ' is silent'); ok(Math.abs(pdb - J.SFX_TARGET[k]) <= 5, k + ' voice ' + v + ' peaks at ' + pdb.toFixed(1) + ' dBFS (target ' + J.SFX_TARGET[k] + '): re-measure its VOICE_GAIN');
+      }
+    } finally { forceVoice = null; }
+  }, { slow: true });
+  test('jelly squash: a bigger fall flattens the jelly more, it wobbles sideways, and none of it touches the hitbox', async () => {
+    await J.startLevel(J.OFFICIAL[0], 'practice', false);
+    const peak = vn => { J.resetRun(); landEvt = vn * K; const y0 = J.P.y, wx0 = J.P.wx; let mn = 0, lean = 0; for (let i = 0; i < 120; i++) { softAfterCore(J.STEP, 0); mn = Math.min(mn, J.SQ_.s); lean = Math.max(lean, Math.abs(J.SQ_.k)); } eq(J.P.y, y0, 'the squash never moves the hitbox'); eq(J.P.wx, wx0, 'or the run'); return { mn, lean }; };
+    const small = peak(300), hop = peak(900), big = peak(1250);
+    ok(small.mn < 0 && hop.mn < small.mn && big.mn < hop.mn, 'squash grows with the fall: ' + [small.mn, hop.mn, big.mn].map(x => x.toFixed(2)).join(', '));
+    ok(hop.mn <= -.2, 'an ordinary hop squashes at least a fifth (' + hop.mn.toFixed(2) + ')'); ok(big.mn <= -.35 && big.mn >= -.5, 'a pad-sized fall flattens it to about half (' + big.mn.toFixed(2) + ')');
+    ok(big.lean >= .08 && big.lean <= .3, 'a big landing sways the jelly sideways (' + big.lean.toFixed(3) + ')');
+    for (let i = 1; i <= 20; i++) ok(landSquashV(i * 62) >= landSquashV((i - 1) * 62), 'landSquashV never shrinks as the fall grows');
+    J.resetRun();
+  });
+  test('jelly jiggle: after a hard landing the skin keeps quivering for a while, and never folds', async () => {
+    const FL = 400, floor = (x, y) => { if (y > FL) { CR[0] = 0; CR[1] = -1; CR[2] = y - FL; return true; } return false; };
+    const s = new Soft(24, 23, 0, FL - 23 - 300, GAMEBODY), hs = []; let landed = -1, worstAr = 9, heals = 0;
+    for (let k = 0; k < 420; k++) { s.step(J.STEP, { gy: G, resolve: floor }); if (s.impact > 150 && landed < 0) landed = k; const b = s.bounds(); hs.push((b.maxy - b.miny) / 46); if (landed >= 0) worstAr = Math.min(worstAr, s.health().ar); if (s.collapsed()) { heals++; s.heal(.3); } }
+    const swing = (a, b) => { const g = hs.slice(landed + a, landed + b); return Math.max(...g) - Math.min(...g); };
+    ok(landed > 0, 'it landed'); ok(swing(30, 60) >= .11, 'half a second on it is still swinging (' + swing(30, 60).toFixed(3) + ')'); ok(swing(60, 120) >= .03, 'a second on it still quivers (' + swing(60, 120).toFixed(3) + ')');
+    ok(worstAr >= .6, 'it never folds (area ' + worstAr.toFixed(2) + ')'); ok(heals <= 5, 'it rarely needs healing (' + heals + ')'); ok(swing(300, 360) < .01, 'and it settles');
+  });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
     eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
     for (const w of WORLD_TUNE) ok(TUNES[w], 'world points at a missing tune');
