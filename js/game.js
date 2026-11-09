@@ -67,25 +67,26 @@ function resetRun() {
   P.wx = 0; P.form = 'cube'; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
   SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = 0; SQ_.was = true; SQ_.lastVy = 0;
   got = 0; hearts.forEach(h => h.got = false); orbs.forEach(o => { o.used = false; }); pads.forEach(p => { p.sq = 0; p.cool = 0; });
-  inp.buf = 0; inp.pt = -1; shake = 0; ghost = 0; cps = []; pcp = []; hintI = 0; pAutoX = 12 * T; cpT = 0; combo = 0; tuneI = 0; lastBeat = -1; placeJelly(); snapPrev();
+  inp.buf = 0; inp.pt = -1; shake = 0; ghost = 0; cps = []; pcp = []; hintI = 0; pAutoX = 12 * T; cpT = 0; combo = 0; lastBeat = -1; placeJelly(); snapPrev();
   clusters.forEach(c => { c.done = false; }); scoreNow = 0; judgeBase = 0; judgeN = 0; judged = { PERFECT: 0, GREAT: 0, GOOD: 0, OK: 0 };
 }
 function pct() { return Math.floor(clamp(P.wx / FINISH, 0, 1) * 100); }
 let lastWorld = -1;   // the world the player is currently in, so entering a new one gets an intro
 function startLevel(L, m, test) {
   initAudio(); edPreview = false; buildLevel(L, true); mode = m; testing = !!test; resetRun(); attempts = 1; state = 'play'; inp.buf = .12; songStart(L, 0);
-  curTune = tuneFor(L); tuneI = 0; tuneAnnounced = false;
+  curTune = tuneFor(L); tuneI = curTune ? tuneRec(curTune).pos % curTune.notes.length : 0; tuneAnnounced = false;   // a tune carries on from where the last run left it
   const w = WORLDS[L.world]; ambStart(w ? w.amb : null);
   if (w && L.world !== lastWorld && !test) { say('World ' + (L.world + 1) + ' · ' + w.name, 3.2); sfx.intro(); } else if (!test) sfx.start();
   lastWorld = w ? L.world : -1;
 }
 function restartRun() { resetRun(); attempts++; state = 'play'; songStart(curLevel, 0); }
 function leaveRun() {
+  tuneSave();
   setSqueak(200, 0); setHum(0); humOn = 0; room.grabs = []; room.inds = []; songStop(); ambStop(); edPreview = false;
   if (testing) { testing = false; buildLevel(edLevel); resetRun(); state = 'edit'; return; }
   buildLevel(curLevel); resetRun(); state = 'select'; titleT = 0;
 }
-function toTitle() { lastWorld = -1; ambStop(); roomPanel = null; holdCancel(); setSqueak(200, 0); setSquelch(0, 'slime'); setHum(0); humOn = 0; room.grabs = []; room.inds = []; room.boost = 1; songStop(); studio = false; flow = 0; if (roomPreset === 'clay') { roomPreset = 'slime'; room.prm = PRESETS.slime; room.relax(); } edPreview = false; testing = false; buildLevel(OFFICIAL[0]); resetRun(); state = 'title'; titleT = 0; }
+function toTitle() { tuneSave(); jukeStop(); lastWorld = -1; ambStop(); roomPanel = null; holdCancel(); setSqueak(200, 0); setSquelch(0, 'slime'); setHum(0); humOn = 0; room.grabs = []; room.inds = []; room.boost = 1; songStop(); studio = false; flow = 0; if (roomPreset === 'clay') { roomPreset = 'slime'; room.prm = PRESETS.slime; room.relax(); } edPreview = false; testing = false; buildLevel(OFFICIAL[0]); resetRun(); state = 'title'; titleT = 0; }
 // Zen checkpoints: a spot with a short hazard-free stretch around it (so respawning there is never unfair)
 function clearAhead() {
   const a = P.wx - 40, b = P.wx + 140;
@@ -104,7 +105,7 @@ function zenRespawn() {
   P.wx = c.wx; P.form = c.form || 'cube'; P.h = P.form === 'ship' ? SHIP_H : CUBE_H; P.y = c.y; P.vy = 0; P.grounded = P.form === 'cube';
   // protected until you have carried on past the place you died, so a respawn can never loop on the same obstacle
   ghost = .45; ghostX = dx + 170; inp.buf = 0; placeJelly();
-  cps = cps.filter(q => q.wx <= c.wx); sfx.bloop(0); snapPrev(); combo = 0; tuneI = 0; songStart(curLevel, P.wx / SPEED);   // music rewinds with you, staying on the grid
+  cps = cps.filter(q => q.wx <= c.wx); sfx.bloop(0); snapPrev(); combo = 0; songStart(curLevel, P.wx / SPEED);   // music rewinds with you, staying on the grid
   for (let i = 0; i < 12; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h / 2, vx: (Math.random() - .5) * 240, vy: -Math.random() * 240, g: 200, type: 'star', size: 4, life: .8, max: .8, col: '#fff' });
 }
 /* ---------- practice mode ----------
@@ -132,7 +133,7 @@ function practiceRespawn() {
   if (!c) { resetRun(); state = 'play'; songStart(curLevel, 0); return; }
   Object.assign(P, { wx: c.wx, y: c.y, vy: c.vy, grounded: c.grounded, coy: c.coy, form: c.form, h: c.h, ledgeX: c.ledgeX, ledgeY: c.ledgeY });
   hearts.forEach((h, i) => { h.got = c.hearts[i]; }); orbs.forEach((o, i) => { o.used = c.orbs[i]; }); pads.forEach((q, i) => { q.cool = c.pads[i]; q.sq = 0; }); got = c.got;
-  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = 0; inp.buf = 0; inp.pt = -1; shake = 0; combo = 0; ghost = 0; pcp = keep; tuneI = 0;
+  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = 0; inp.buf = 0; inp.pt = -1; shake = 0; combo = 0; ghost = 0; pcp = keep;
   clusters.forEach(q => { q.done = q.end * T <= P.wx; });
   hintI = curLevel.hints ? curLevel.hints.findIndex(h => h.x - 5 > P.wx / T) : 0; if (hintI < 0) hintI = curLevel.hints.length;
   placeJelly(); snapPrev(); songStart(curLevel, P.wx / SPEED);   // the music rewinds with you, staying on the grid
@@ -142,7 +143,7 @@ function die() {
   if (simming) { state = 'dead'; return; }
   if (mode === 'zen') { zenRespawn(); return; }
   if (mode === 'practice') { practiceRespawn(); return; }
-  state = 'dead'; deadT = 0; shake = reduceMotion() ? 0 : .4; playHit(curHaz()); lastPct = pct(); setHum(0); humOn = 0; songStop(); combo = 0; tuneI = 0;
+  state = 'dead'; deadT = 0; shake = reduceMotion() ? 0 : .4; playHit(curHaz()); lastPct = pct(); setHum(0); humOn = 0; songStop(); combo = 0; tuneSave();
   if (!testing && lastPct > (store.best[curLevel.id] || 0)) { if (mode === 'dash' && (store.best[curLevel.id] || 0) > 0) { say('New best: ' + lastPct + '%', 2.4); setTimeout(() => sfx.newBest(), 380); } store.best[curLevel.id] = lastPct; persist(); }
   const bb = jelly.bounds(), hzCol = curHaz().col;
   for (let i = 0; i < 34; i++) {
@@ -159,7 +160,7 @@ function winJingle() {
 }
 function win() {
   if (simming) { state = 'win'; return; }
-  state = 'win'; winT = 0; setHum(0); humOn = 0; songStop(); ambStop();
+  state = 'win'; winT = 0; setHum(0); humOn = 0; songStop(); ambStop(); tuneSave();
   const acc = judgeN ? judgeBase / (100 * judgeN) : 1; winStars = acc >= .8 ? 3 : acc >= .6 ? 2 : 1;   // rhythm rating from timing accuracy
   winJingle();
   if (!testing && mode === 'dash') {

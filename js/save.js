@@ -3,7 +3,7 @@
    Modules are classic scripts that share one global scope (so they can be loaded in order from index.html, in the order listed there). */
 
 /* ================= persistence ================= */
-const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 4;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
+const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 5;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const num = (v, d) => Number.isFinite(+v) && v !== null && v !== '' ? +v : d;
 const DEFAULT_SET = { music: .8, sfx: .9, haptics: true, reduceMotion: null, tumble: true };   // reduceMotion: null = follow the device's setting
@@ -14,6 +14,7 @@ function normalizeStore(raw) {
   for (const k of ['best', 'score', 'rate']) if (!isObj(st[k])) st[k] = {};
   st.studio = isObj(r.studio) ? r.studio : {}; st.studio.stars = isObj(st.studio.stars) ? st.studio.stars : {};
   st.pace = num(st.pace, 1) > 0 ? num(st.pace, 1) : 1; st.haz = Math.max(0, Math.floor(num(st.haz, 0))); st.skin = Math.max(0, Math.floor(num(st.skin, 0)));
+  st.tunes = {}; if (isObj(r.tunes)) for (const k of Object.keys(r.tunes).slice(0, 40)) { const t = r.tunes[k]; if (isObj(t)) st.tunes[k] = { n: Math.max(0, Math.floor(num(t.n, 0))), pos: Math.max(0, Math.floor(num(t.pos, 0))) }; }   // tune id -> { n: times played through, pos: where the next run picks the tune up }
   const sv = isObj(r.set) ? r.set : {}; st.set = Object.assign({}, DEFAULT_SET, sv);
   st.set.music = clamp(num(sv.music, DEFAULT_SET.music), 0, 1); st.set.sfx = clamp(num(sv.sfx, DEFAULT_SET.sfx), 0, 1);
   st.set.haptics = sv.haptics !== false; st.set.tumble = sv.tumble !== false; st.set.reduceMotion = sv.reduceMotion === true ? true : sv.reduceMotion === false ? false : null;

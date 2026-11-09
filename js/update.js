@@ -17,7 +17,7 @@ function update(dt) {
   if (state === 'room') { roomStep(dt); if (studio) studioStep(dt); return; }
   if (squelchOn) setSquelch(0, 'slime');
   if (state === 'edit') { if (edPreview) { songT += dt; songUpdate(.7); } return; }
-  if (state === 'select' || state === 'settings') return;
+  if (state === 'select' || state === 'settings' || state === 'jukebox') return;
   if (state === 'play') {
     if (mode === 'zen') {
       if (P.wx >= ghostX) ghost = Math.max(0, ghost - dt);
