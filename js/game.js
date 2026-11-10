@@ -33,14 +33,14 @@ let frameAcc = 0, frameNowWall = 0;
 const gameNow = () => P.wx / SPEED + frameAcc + (performance.now() - frameNowWall) / 1000;   // simulated time + the part of the frame not simulated yet
 const mouse = { x: -1, y: -1, down: false };
 let menuArm = 0;   // > 0 for two seconds after the first tap on the in-run menu button
-const P = { wx: 0, y: GY - CUBE_H, vy: 0, w: 36, h: CUBE_H, grounded: true, coy: 0, form: 'cube', ledgeX: null, ledgeY: 0, flat: false };
+const P = { wx: 0, y: GY - CUBE_H, vy: 0, w: 36, h: CUBE_H, grounded: true, coy: 0, form: 'cube', ledgeX: null, ledgeY: 0, flat: false, puff: PUFF_T, puffing: false };
 const parts = [];
 const OS_REDUCE = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const reduceMotion = () => SET().reduceMotion === null ? OS_REDUCE : SET().reduceMotion;   // shake, spin and most particles are skipped when on
 function spawn(o) { if (simming) return; if (o.type !== 'txt' && reduceMotion() && Math.random() < .65) return; parts.push(Object.assign({ life: 1, max: 1, g: 0, vx: 0, vy: 0, size: 4, rot: 0, vr: 0, type: 'drop', col: '#fff' }, o)); }
 const jelly = new Soft(24, 23, 0, 0, GAMEBODY);
 // visual squash/stretch springs and the tumble in the air (drawn as a transform on top of the soft body, never affects the hitbox)
-const SQ_ = { s: 0, v: 0, rot: 0, rv: 0, was: true, lastVy: 0, k: 0, kv: 0, pv: 0, pt: 0 };   // k, kv: the sideways wobble (a lean that rings back and forth after a landing or a takeoff); pv, pt: a takeoff stretch waiting its turn (it follows the landing squat by a few frames)
+const SQ_ = { s: 0, v: 0, rot: 0, rv: 0, was: true, lastVy: 0, k: 0, kv: 0, pv: 0, pt: 0, pf: 0 };   // pf: how puffed up the jelly looks (0..1, eases in and out)   // k, kv: the sideways wobble (a lean that rings back and forth after a landing or a takeoff); pv, pt: a takeoff stretch waiting its turn (it follows the landing squat by a few frames)
 let landEvt = 0;   // the fall speed of a landing (or a pad hit) that the squash spring has not been told about yet; the jelly squashes even when a held jump launches it again in the same step
 const stretchKick = v => { SQ_.pv += v; if (SQ_.pt <= 0) SQ_.pt = .07; };
 // how hard the squash spring is struck on landing, from the fall speed at the pace-neutral scale (vn = speed / K, so a level's tempo does not change how big a jump looks): a small drop is a nudge, a normal hop a clear squish, a pad or a long fall flattens the jelly to about half its height
@@ -68,8 +68,8 @@ const say = (t, life = 2.5) => { toast = { t, life }; };
 
 /* ================= game flow ================= */
 function resetRun() {
-  P.wx = 0; P.form = 'cube'; P.flat = false; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
-  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = SQ_.k = SQ_.kv = SQ_.pv = SQ_.pt = 0; SQ_.was = true; SQ_.lastVy = 0; landEvt = 0;
+  P.wx = 0; P.form = 'cube'; P.flat = false; P.puff = PUFF_T; P.puffing = false; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
+  SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = SQ_.k = SQ_.kv = SQ_.pv = SQ_.pt = SQ_.pf = 0; SQ_.was = true; SQ_.lastVy = 0; landEvt = 0;
   got = 0; hearts.forEach(h => h.got = false); orbs.forEach(o => { o.used = false; }); pads.forEach(p => { p.sq = 0; p.cool = 0; });
   inp.buf = 0; inp.pt = -1; shake = 0; ghost = 0; cps = []; pcp = []; hintI = 0; pAutoX = 12 * T; cpT = 0; combo = 0; tuneI = 0; lastBeat = -1; placeJelly(); snapPrev();
   clusters.forEach(c => { c.done = false; }); scoreNow = 0; judgeBase = 0; judgeN = 0; judged = { PERFECT: 0, GREAT: 0, GOOD: 0, OK: 0 };
@@ -105,7 +105,7 @@ function zenRespawn() {
   const dx = P.wx; let c = null;
   for (let i = cps.length - 1; i >= 0; i--) if (cps[i].wx <= dx - 100) { c = cps[i]; break; }
   if (!c) c = cps[0] || { wx: 0, y: GY - CUBE_H, form: 'cube' };
-  P.wx = c.wx; P.form = c.form || 'cube'; P.flat = false; P.h = P.form === 'ship' ? SHIP_H : CUBE_H; P.y = c.y; P.vy = 0; P.grounded = P.form === 'cube';
+  P.wx = c.wx; P.form = c.form || 'cube'; P.flat = false; P.puff = PUFF_T; P.puffing = false; P.h = P.form === 'ship' ? SHIP_H : CUBE_H; P.y = c.y; P.vy = 0; P.grounded = P.form === 'cube';
   // protected until you have carried on past the place you died, so a respawn can never loop on the same obstacle
   ghost = .45; ghostX = dx + 170; inp.buf = 0; placeJelly();
   cps = cps.filter(q => q.wx <= c.wx); sfx.bloop(0); snapPrev(); combo = 0; tuneI = 0; songStart(curLevel, P.wx / SPEED);   // music rewinds with you, staying on the grid
@@ -254,7 +254,11 @@ function moveCube(dt, speed, lethal) {
   const L = P.wx + 3, R = P.wx + P.w - 3;
   if (lethal) for (const s of solids) if (R > s.x0 && L < s.x1 && pb0 > s.top + 14 && P.y < s.bot) { die(); return false; }
   const prevB = P.y + P.h, wasG = P.grounded;
-  P.vy = Math.min(P.vy + G * dt, VCAP); const impactVy = P.vy;
+  // the puff power: falling in the air with Squish held (in a level built for it) inflates the jelly; it sinks slowly until its puff runs out (it refills on the ground)
+  const gl = hasPuff && inp.flat && !P.grounded && P.vy > 0 && P.puff > 0; P.puffing = gl;
+  if (gl) { P.puff -= dt * K; const cap = PUFF_V * K; P.vy = P.vy > cap ? Math.max(cap, P.vy - 2600 * K * K * dt) : Math.min(P.vy + G * PUFF_G * dt, cap); }
+  else P.vy = Math.min(P.vy + G * dt, VCAP);
+  const impactVy = P.vy;
   P.y += P.vy * dt; P.grounded = false;
   for (const s of solids) {
     if (R > s.x0 && L < s.x1 && P.vy >= 0 && prevB <= s.top + 14 && P.y + P.h >= s.top) { P.y = s.top - P.h; P.vy = 0; P.grounded = true; P.ledgeX = s.x1; P.ledgeY = s.top; break; }   // remember where the support ends: the sticky strand hangs from it
@@ -263,7 +267,7 @@ function moveCube(dt, speed, lethal) {
   if (P.grounded && !wasG && impactVy > 220 && !simming && state === 'play') sfx.land(impactVy);   // a soft thump on landing
   // Zen protection: solid ground bridges any gap until you are clear of where you last fell
   if (!P.grounded && mode === 'zen' && ghost > 0 && P.vy >= 0 && P.y + P.h >= GY && prevB <= GY + 14) { P.y = GY - P.h; P.vy = 0; P.grounded = true; }
-  if (P.grounded) P.coy = COY; else P.coy -= dt;
+  if (P.grounded) { P.coy = COY; P.puff = PUFF_T; } else P.coy -= dt;
   inp.buf -= dt;
   if (state === 'play' && (inp.buf > 0 || (autoHold && inp.held)) && (P.grounded || P.coy > 0) && (!P.flat || standClear())) jumpFx();   // jumping stays on while Zen's ghost protection is active (a flat jelly under a gate cannot jump: there is no room)
   if (state === 'play' && P.y > H + 60) { die(); return false; }
@@ -333,10 +337,11 @@ function softAfterCore(dt, spd) {
   // squash & stretch spring, and a full tumble in the air that lands upright with a wobble
   {
     const q = SQ_;
-    if (ship || state !== 'play') { q.s *= .9; q.v *= .9; q.k *= .9; q.kv *= .9; q.rot += (0 - q.rot) * .2; q.rv = 0; q.was = P.grounded; q.pv = q.pt = 0; landEvt = 0; }
+    if (ship || state !== 'play') { q.s *= .9; q.v *= .9; q.k *= .9; q.kv *= .9; q.pf *= .9; q.rot += (0 - q.rot) * .2; q.rv = 0; q.was = P.grounded; q.pv = q.pt = 0; landEvt = 0; }
     else {
       if (landEvt / K > 220) { const lv = landSquashV(landEvt / K); q.v -= lv; jelly.kick(lv * 40, -lv * 22); q.kv += (q.kv > 0 ? -1 : 1) * lv * .9; }   // landing: squash by how far it fell, so a big jump (a pad, an orb, a long drop) flattens it much more than a hop; the skin splats sideways and jiggles
       landEvt = 0;
+      { const was = q.pf > .5; q.pf += ((P.puffing ? 1 : 0) - q.pf) * Math.min(1, dt * 14); if (!was && q.pf > .5 && P.puffing) { sfx.bloop(1); buzz(6); q.v += 2; } }   // puffing up: a round "bloop", and the squash spring gives a little wobble
       if (q.pt > 0 && (q.pt -= dt) <= 0) { q.v += q.pv; q.pv = 0; }   // the takeoff stretch comes a beat after the squat
       q.was = P.grounded; q.lastVy = P.vy;
       q.kv += (-3600 * q.k - 7 * q.kv) * dt; q.k = clamp(q.k + q.kv * dt, -.3, .3);   // the lean rings at about 9 Hz and fades in a third of a second

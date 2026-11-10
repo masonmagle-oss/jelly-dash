@@ -330,12 +330,14 @@ function squishButton() {
   ctx.save(); ctx.globalAlpha = .94; ctx.fillStyle = g; rr(b.x, b.y + (on ? 5 : 0), b.w, b.h - (on ? 5 : 0), 24); ctx.fill();
   ctx.strokeStyle = on ? '#fff' : '#ff8fc7'; ctx.lineWidth = 4; ctx.stroke(); ctx.globalAlpha = 1;
   txt('SQUISH', b.x + b.w / 2, b.y + 32 + (on ? 5 : 0), 28, on ? '#fff' : C.pink, on ? C.plum : '#fff');
-  txt(isTouchUi() ? 'hold to flatten' : 'hold S / ↓ / Shift', b.x + b.w / 2, b.y + 60 + (on ? 5 : 0), 15, on ? '#fff' : C.plum);
+  const how = hasGate && hasPuff ? 'ground: flat · air: float' : hasPuff ? 'hold in air: float' : isTouchUi() ? 'hold to flatten' : 'hold S / ↓ / Shift';
+  txt(how, b.x + b.w / 2, b.y + (hasPuff ? 53 : 58) + (on ? 5 : 0), hasPuff ? 13 : 15, on ? '#fff' : C.plum);
+  if (hasPuff) { const my = b.y + b.h - 14 + (on ? 3 : 0); ctx.fillStyle = 'rgba(120,30,90,.25)'; rr(b.x + 20, my, b.w - 40, 6, 3); ctx.fill(); ctx.fillStyle = on ? '#fff' : C.pink; rr(b.x + 20, my, Math.max(6, (b.w - 40) * clamp(P.puff / PUFF_T, 0, 1)), 6, 3); ctx.fill(); }   // the puff meter: how much float is left this hop
   ctx.restore();
 }
 function hud() {
   if (['title', 'room', 'select', 'edit', 'solving'].includes(state)) return;
-  if (hasGate && (state === 'play' || state === 'dead')) squishButton();
+  if (hasSqueeze && (state === 'play' || state === 'dead')) squishButton();
   const prog = clamp(P.wx / FINISH, 0, 1), bx = W / 2 - 200, by = 20, bw = 400, bh = 14;
   ctx.fillStyle = 'rgba(255,255,255,.6)'; rr(bx, by, bw, bh, 7); ctx.fill();
   const g = ctx.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, '#ff9ccf'); g.addColorStop(1, '#c86bff');
@@ -547,7 +549,7 @@ function draw() {
     if (ship) drawShipBack(scroll);
     const bb0 = jelly.bounds(), q = SQ_, px = bb0.cx - scroll, sy = 1 + q.s, sx = 1 / Math.sqrt(sy);
     if (!ship && !P.grounded && P.coy > 0 && P.ledgeX != null && bb0.cx > P.ledgeX + 3) drawStrand(scroll, bb0);
-    drawSoft(jelly, scroll, { rot: ship ? 0 : q.rot, sx: ship ? 1 : sx, sy: ship ? 1 : sy, sk: ship || reduceMotion() ? 0 : q.k, ground: GY, alpha: ghost > 0 ? .45 + .2 * Math.sin(tg * 20) : 1, happy: state === 'win', open: (!P.grounded && P.vy < -100 && !ship) || (ship && inp.held) });
+    drawSoft(jelly, scroll, { rot: ship ? 0 : q.rot, sx: ship ? 1 : sx * (1 + .2 * q.pf), sy: ship ? 1 : sy * (1 + .2 * q.pf), sk: ship || reduceMotion() ? 0 : q.k, ground: GY, alpha: ghost > 0 ? .45 + .2 * Math.sin(tg * 20) : 1, happy: state === 'win', open: (!P.grounded && P.vy < -100 && !ship) || (ship && inp.held) });
     if (ship) drawShipFront(scroll);
   }
   ctx.restore();

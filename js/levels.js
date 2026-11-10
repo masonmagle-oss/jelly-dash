@@ -47,6 +47,11 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
     // orb patterns: a hazard too wide for one jump, with an orb over its middle for the second
     og: n => { const sh = gapShift(x, n); for (let i = 0; i < n; i++) add({ t: 'gap', x: x + sh + i }); add({ t: 'orb', x: x + sh + (n - 1) / 2, y: 2 }); arc(x + sh - 1, x + sh + n, 3.2, 3); x += sh + n + 5; },
     os: n => { for (let i = 0; i < n; i++) add({ t: 'spike', x: x + i, y: 0 }); add({ t: 'orb', x: x + (n - 1) / 2, y: 2 }); arc(x - 1, x + n, 3.4, 3); x += n + 5; },   // a short breather of flat ground, no hazards
+    // puff patterns (levels with extra.puff): pg = a gap too wide for one jump (n tiles): hop, then hold Squish to float across; hearts ride the glide. pp = a wide gap, 2 tiles of floor, then a spike: glide, land, hop at once
+    // (the hearts follow the real path of a hop and a float: up near the take-off, sinking across the gap)
+    pgHearts: (s, n) => { add({ t: 'heart', x: x + s + 1.5, y: 2.3 }); add({ t: 'heart', x: x + s + n / 2, y: 1.9 }); add({ t: 'heart', x: x + s + n - 1.5, y: 1.1 }); },
+    pg: n => { const s = gapShift(x, n); for (let i = 0; i < n; i++) add({ t: 'gap', x: x + s + i }); C.pgHearts(s, n); x += s + n + 6; },
+    pp: (n, d) => { const s = gapShift(x, n); for (let i = 0; i < n; i++) add({ t: 'gap', x: x + s + i }); add({ t: 'spike', x: x + s + n + d, y: 0 }); C.pgHearts(s, n); x += s + n + d + 1 + 5; },
     // squish patterns: a gummy gate n tiles wide (flatten to slip under it, hearts on the floor beneath); fs = a gate, d tiles of floor, then a spike: stand up and hop at once
     fl: n => { for (let i = 0; i < n; i++) { add({ t: 'gate', x: x + i }); add({ t: 'heart', x: x + i, y: 0 }); } x += n + 6; },
     fs: (n, d) => { for (let i = 0; i < n; i++) { add({ t: 'gate', x: x + i }); add({ t: 'heart', x: x + i, y: 0 }); } add({ t: 'spike', x: x + n + d, y: 0 }); arc(x + n + d - 1, x + n + d + 1, 2.8, 3); x += n + d + 1 + 5; },
@@ -71,6 +76,8 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
     else if ((m = /^g(\d)$/.exec(tok))) C.gap(+m[1]);
     else if ((m = /^b(\d)(\d)$/.exec(tok))) C.block(+m[1], +m[2]);
     else if ((m = /^gs(\d)(\d)$/.exec(tok))) C.gs(+m[1], +m[2]);
+    else if ((m = /^pg(\d)$/.exec(tok))) C.pg(+m[1]);
+    else if ((m = /^pp(\d)(\d)$/.exec(tok))) C.pp(+m[1], +m[2]);
     else if ((m = /^fl(\d)$/.exec(tok))) C.fl(+m[1]);
     else if ((m = /^fs(\d)(\d)$/.exec(tok))) C.fs(+m[1], +m[2]);
     else if ((m = /^ss(\d)(\d)(\d)$/.exec(tok))) C.ss(+m[1], +m[2], +m[3]);
@@ -80,7 +87,7 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
   }
   alignSpikes(objs);
   const L = { id, name, stars, pal, len: x + 2, objs, bpm, style, auto, coy, script };   // script: kept so the tests can measure how hard each level is (see "difficulty ramp" in tests/suite.js)
-  if (hints.length) L.hints = hints; if (extra && extra.tutorial) L.tutorial = true;
+  if (hints.length) L.hints = hints; if (extra && extra.tutorial) L.tutorial = true; if (extra && extra.puff) L.puff = true; if (extra && extra.intro) L.intro = true;
   return L;
 }
 const OFFICIAL = [
@@ -112,9 +119,14 @@ const OFFICIAL = [
   ['Puddle Hop', 1, [0, 2, 1], 'h0 fl2 h1 fl3 s2 fl2 fl3 h2 fs23 fl2 fs33', 103, 1, false, .06, { hints: [
     'New move! Hold SQUISH to flatten and slip under the gummy gates, then let go', 'Hearts hide under the gates: squish to get them!', 'Squish, let go, then hop the gumdrop'] }],
   ['Gummy Gates', 3, [1, 3, 4], 'fl2 s2 fs23 fl3 ss212 fs22 fl2 g3 fs23 fl3 fs32 s2 fs22', 110, 9, false, .06],
+  // the puff power (levels with extra.puff): hold Squish in the air to puff up into a balloon and float across gaps too wide for any jump (pg = a wide gap, pp = a wide gap, then a spike).
+  // Puff Pillow is a gentle intro (extra.intro: a new power is taught below the pressure of its neighbours, so the ramp test skips it, like the Welcome level); Pillow Fort mixes both powers.
+  ['Puff Pillow', 2, [1, 3, 4], 'h0 pg6 h1 s2 pg6 pg6 h2 pp63 pg7 s2 pg6 pp73', 107, 4, false, .06, { puff: true, intro: true, hints: [
+    'New move! Hop, then HOLD SQUISH in the air to puff up and float', 'Let go to drop. Your puff refills when you land', 'Float, land, then hop the gumdrop'] }],
+  ['Pillow Fort', 3, [2, 5, 0], 'pg7 ss232 fl2 pg7 ss212 fs23 pg7 ss321 fs22 pg7 ss232 fs22', 116, 6, false, .06, { puff: true }],
 ].map(([n, st, pal, sc, bpm, sty, auto, coy, extra], i) => genLevel('o' + i, n, st, pal, sc, bpm, sty, auto !== false, coy, extra));
 const moveBefore = (id, beforeName) => { const [l] = OFFICIAL.splice(OFFICIAL.findIndex(q => q.id === id), 1); OFFICIAL.splice(OFFICIAL.findIndex(q => q.name === beforeName), 0, l); };
-moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush'); moveBefore('o15', 'Jelly Bounce'); moveBefore('o16', 'Orb Orchard');
+moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush'); moveBefore('o15', 'Jelly Bounce'); moveBefore('o16', 'Orb Orchard'); moveBefore('o17', 'Gap Year'); moveBefore('o18', 'Sugar Rush');
 /* Hearts that no winning run can take together with the rest (the arc's low end hearts sit where the jump over the hazard has already lifted you), found with
    heartsSync() in solver.js (at Chill, Normal and Spicy pace) and removed so every official level can be finished with all of its hearts at every speed.
    [x, y] in level units. The test suite re-runs the search,
@@ -133,13 +145,13 @@ const WORLDS = [
   { id: 'night', name: 'Night Garden', tag: 'moonlight, music boxes and mochi', pal: [6, 4, 5], amb: 'night' },
   { id: 'slime', name: 'Slime Palace', tag: 'the queen is home', pal: [7, 3, 1], amb: 'slime' },
 ];
-const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4 };
-const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8 };   // indexes into STYLES (music.js)
+const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Puff Pillow': 1, 'Pillow Fort': 2, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4 };
+const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Puff Pillow': 9, 'Pillow Fort': 6, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8 };   // indexes into STYLES (music.js)
 for (const L of OFFICIAL) { L.world = WORLD_OF[L.name]; L.style = LEVEL_STYLE[L.name]; L.pal = WORLDS[L.world].pal.slice(); }
 
 /* ---------- live world built from the current level ---------- */
 const solids = [], spikes = [], pads = [], hearts = [], gaps = [], portals = [], orbs = [], clusters = [];
-let hasGate = false;   // this level uses the squish power: the Squish button shows and the solver also tries flattening
+let hasGate = false, hasPuff = false, hasSqueeze = false;   // hasGate: the level uses the squish power (flatten under gummy gates); hasPuff: it allows the puff power (glide in the air); hasSqueeze: either, so the Squish button shows and the solver also tries holding it
 let curLevel = OFFICIAL[0], FINISH = OFFICIAL[0].len * T;
 function buildLevel(L, usePace = false) {
   solids.length = spikes.length = pads.length = hearts.length = gaps.length = portals.length = orbs.length = 0;
@@ -178,7 +190,7 @@ function buildLevel(L, usePace = false) {
   for (let i = 0; i < portals.length; i++) if (portals[i].to === 'ship') { const nx = portals.slice(i + 1).find(p => p.to === 'cube'); solids.push({ x0: portals[i].x, x1: nx ? nx.x : FINISH, top: -400, h: 0, bot: CEIL, ceil: true }); }
   { const gc = [...gateCols].sort((a, b) => a - b); let a = null, p = null;   // gummy gates: a run of columns is one gate, from the top of the screen down to GATE_GAP above the floor
     for (let i = 0; i <= gc.length; i++) { const c = gc[i]; if (c !== undefined && p !== null && c === p + 1) { p = c; continue; } if (a !== null) solids.push({ x0: a * T, x1: (p + 1) * T, top: -400, h: 0, bot: GY - GATE_GAP, ceil: true, gate: true }); a = c === undefined ? null : c; p = a; } }
-  hasGate = solids.some(s => s.gate);
+  hasGate = solids.some(s => s.gate); hasPuff = !!L.puff; hasSqueeze = hasGate || hasPuff;
   solids.forEach(s => { if (s.bot == null) s.bot = s.top + s.h * T; });
   // Hazard clusters with their IDEAL takeoff (player-centre tile) and safe window (tiles). Measured by sweeping every possible press:
   // spikes: window 2.72-(n-1), ideal a-1.65+(n-1)/2 | gaps: window 5.44-n, ideal a-1.96+n/2 | ground blocks: ~3.5 wide, ideal a-2.49.

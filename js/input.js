@@ -148,7 +148,7 @@ cv.addEventListener('pointerdown', e => {
     sfx.click(); if (menuArm > 0) { menuArm = 0; leaveRun(); } else { menuArm = 2; say('Tap ☰ again to leave', 2); } return;
   }
   try { cv.setPointerCapture(e.pointerId); } catch (err) {}
-  if (state === 'play' && hasGate && mouse.x >= SQB.x && mouse.x <= SQB.x + SQB.w && mouse.y >= SQB.y - 14 && mouse.y <= SQB.y + SQB.h + 14) { flatPtr = e.pointerId; inp.flat = true; return; }   // the on-screen Squish button: its own finger, so the other hand keeps jumping
+  if (state === 'play' && hasSqueeze && mouse.x >= SQB.x && mouse.x <= SQB.x + SQB.w && mouse.y >= SQB.y - 14 && mouse.y <= SQB.y + SQB.h + 14) { flatPtr = e.pointerId; inp.flat = true; return; }   // the on-screen Squish button: its own finger, so the other hand keeps jumping
   touchPtrs.set(e.pointerId, { x: mouse.x });
   if (mode === 'practice' && (state === 'play' || state === 'dead')) { const b = hitUi(); if (b) { b.fn(); return; } }   // the practice buttons
   const sc = SCREENS[state]; if (sc) sc.down(e); else press();
