@@ -13,7 +13,7 @@
   /* ---------- data ---------- */
   test('official levels: unique ids, sane fields, tutorial first', () => {
     const ids = new Set(); for (const l of J.OFFICIAL) { ok(!ids.has(l.id), 'duplicate id ' + l.id); ids.add(l.id); ok(l.name && l.objs.length && l.len > 40, 'bad level ' + l.name); ok(l.stars >= 1 && l.stars <= 5, 'stars ' + l.name); ok(l.coy >= .03 && l.coy <= .12, 'coyote ' + l.name); }
-    eq(J.OFFICIAL.length, 17, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
+    eq(J.OFFICIAL.length, 19, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
     for (const id of ['o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11']) ok(ids.has(id), 'saved id kept: ' + id);
   });
   test('level share codes round-trip every official level', () => {
@@ -173,6 +173,28 @@
     // the other levels do not change: no gates means no squish button and no extra solver actions
     for (const n of ['First Hop', 'Slime Queen']) { J.buildLevel(J.OFFICIAL.find(l => l.name === n)); ok(!hasGate, n + ' has no gates'); }
     J.buildLevel(L); ok(hasGate, 'a level with gates shows the Squish button'); J.resetRun();
+  });
+  test('puff power: a held Squish in the air floats the jelly across a wide gap, only in levels built for it, and it refills on the ground', async () => {
+    const L = J.OFFICIAL.find(l => l.name === 'Puff Pillow'); ok(L && L.puff && L.script.includes('pg'), 'Puff Pillow teaches the power');
+    const gaps = L.objs.filter(o => o.t === 'gap').map(o => o.x), g0 = Math.min(...gaps), g1 = g0 + 6;   // the first wide gap: 6 tiles
+    const hop = async (lvl, puff, off) => {   // hop at `off` tiles from the gap's start; hold Squish from the top of the arc if `puff`
+      await J.startLevel(lvl, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.held = false; J.inp.flat = false; let pressed = false, minVy = 0, floatFrames = 0, hs = new Set();
+      for (let i = 0; i < 4000 && J.state === 'play'; i++) {
+        const cx = (J.P.wx + 18) / 48; if (!pressed && cx >= g0 + off) { J.press(); pressed = true; }
+        J.inp.flat = puff && pressed && J.P.vy > -50; J.update(J.STEP); hs.add(J.P.h); if (J.P.puffing) { floatFrames++; minVy = Math.max(minVy, J.P.vy); }
+        if (cx > g1 + 3) break;
+      }
+      const out = { state: J.state, floatFrames, maxFloatVy: minVy, heights: [...hs], puff: J.P.puff }; J.inp.flat = false; return out;
+    };
+    const no = await hop(L, false, -1), yes = await hop(L, true, -1);
+    eq(no.state, 'dead', 'without puffing the wide gap swallows you'); eq(yes.state, 'play', 'with puffing you float across'); ok(yes.floatFrames > 30, 'it floats for a while (' + yes.floatFrames + ' frames)');
+    ok(yes.maxFloatVy <= PUFF_V * K * 1.05 + 1, 'and sinks slowly (' + Math.round(yes.maxFloatVy) + ' px/s at most)'); eq(yes.heights.join(), String(CUBE_H), 'the hitbox never changes size');
+    ok(yes.floatFrames * STEP * K <= PUFF_T + .02, 'the puff is limited to PUFF_T per hop (' + (yes.floatFrames * STEP * K).toFixed(2) + ' s)');
+    eq(J.P.puff, PUFF_T, 'the puff refills on the ground');
+    // levels that are not built for it do not float, even with the key held: no accidental cheat
+    const fh = J.OFFICIAL.find(l => l.name === 'First Hop'); await J.startLevel(fh, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.flat = true; J.press(); let flew = 0; for (let i = 0; i < 80; i++) { J.update(J.STEP); if (J.P.puffing) flew++; } J.inp.flat = false;
+    eq(flew, 0, 'no float in a level without the puff'); ok(!hasPuff && !hasSqueeze, 'and no Squish button there');
+    J.resetRun();
   });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
     eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
@@ -382,14 +404,18 @@
   const pressureOf = L => {
     J.buildLevel(L); const K = L.bpm / 112.5, msTile = 1000 * T / (360 * K); let w = 0, n = 0, tight = Infinity;
     const add = ms => { w += 1000 / ms; n++; tight = Math.min(tight, ms); };
-    for (const c of clusters) { if (c.ship || (c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45)); }
+    for (const c of clusters) {
+      if (c.ship) continue;
+      if (L.puff && c.kind === 'gap' && c.n >= 6) { add((c.n >= 8 ? 130 : c.n === 7 ? 170 : 220) / K); continue; }   // a wide gap in a puff level: hop and float across (the narrower the time to take off, the heavier)
+      if ((c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45));
+    }
     J.pads.forEach(() => add(300 / K)); for (const o of L.objs) if (o.t === 'orb') add(180 / K);
     for (const s of solids) if (s.gate) add(215 / K);   // a gummy gate: squish in time (about a fifth of a second of room at 112 BPM)
     for (const m of L.script.matchAll(/ship:(\d+)/g)) [...m[1]].map(Number).forEach((s, i, a) => add(Math.max(120, 330 - 45 * Math.abs(s - (i ? a[i - 1] : 2))) / K));
     return { P: w / (L.len * T / (360 * K)), secs: L.len * T / (360 * K), n, tight };
   };
   test('difficulty ramp: tempo never drops and the pressure climbs a notch with every level', () => {
-    const ls = J.OFFICIAL.slice(1), st = ls.map(pressureOf), P = st.map(s => s.P); J.buildLevel(J.OFFICIAL[0]);   // Welcome is the tutorial: it teaches the ideas, so it is not part of the ramp
+    const ls = J.OFFICIAL.slice(1).filter(l => !l.intro), st = ls.map(pressureOf), P = st.map(s => s.P); J.buildLevel(J.OFFICIAL[0]);   // Welcome is the tutorial and a power's intro level (extra.intro) is gentle on purpose: they teach the ideas, so they are not part of the ramp
     for (let i = 1; i < ls.length; i++) {
       ok(ls[i].bpm >= ls[i - 1].bpm, `${ls[i].name} (${ls[i].bpm} BPM) is slower than ${ls[i - 1].name} (${ls[i - 1].bpm})`);
       ok(ls[i].stars >= ls[i - 1].stars, `${ls[i].name} has fewer stars than ${ls[i - 1].name}`);
