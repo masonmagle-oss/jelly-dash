@@ -5,7 +5,7 @@
 /* ================= level data =================
    A level is { id, name, stars, pal:[themeIdx..], len (tiles), objs:[...] } with objs in tile units:
    block/spike/pad {x, y}, heart {x, y}, gap {x}, portal {x, to:'ship'|'cube'}; y = row above the ground (0..6). */
-const OBJ_TYPES = ['block', 'spike', 'pad', 'heart', 'gap', 'portal', 'orb'];   // append only: share codes store the index
+const OBJ_TYPES = ['block', 'spike', 'pad', 'heart', 'gap', 'portal', 'orb', 'gate'];   // gate {x}: a gummy gate hanging from the ceiling down to GATE_GAP above the floor: only a flattened (squished) jelly fits under it   // append only: share codes store the index
 // Shift every ground-spike group (by less than a tile) so its IDEAL takeoff lands exactly on an 8th-note line of the music grid
 // (8th note = 2 tiles). Jumping on the beat is then the centre of the safe window, not just a nice idea.
 // a gap of n starting at tile a is placed 0 or 1 tile later so that its ideal takeoff (a-1.96+n/2, minus the player's half width) falls closest to a beat line
@@ -47,6 +47,9 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
     // orb patterns: a hazard too wide for one jump, with an orb over its middle for the second
     og: n => { const sh = gapShift(x, n); for (let i = 0; i < n; i++) add({ t: 'gap', x: x + sh + i }); add({ t: 'orb', x: x + sh + (n - 1) / 2, y: 2 }); arc(x + sh - 1, x + sh + n, 3.2, 3); x += sh + n + 5; },
     os: n => { for (let i = 0; i < n; i++) add({ t: 'spike', x: x + i, y: 0 }); add({ t: 'orb', x: x + (n - 1) / 2, y: 2 }); arc(x - 1, x + n, 3.4, 3); x += n + 5; },   // a short breather of flat ground, no hazards
+    // squish patterns: a gummy gate n tiles wide (flatten to slip under it, hearts on the floor beneath); fs = a gate, d tiles of floor, then a spike: stand up and hop at once
+    fl: n => { for (let i = 0; i < n; i++) { add({ t: 'gate', x: x + i }); add({ t: 'heart', x: x + i, y: 0 }); } x += n + 6; },
+    fs: (n, d) => { for (let i = 0; i < n; i++) { add({ t: 'gate', x: x + i }); add({ t: 'heart', x: x + i, y: 0 }); } add({ t: 'spike', x: x + n + d, y: 0 }); arc(x + n + d - 1, x + n + d + 1, 2.8, 3); x += n + d + 1 + 5; },
     ship: rows => {
       const len = 6 + rows.length * 7 + 6;
       add({ t: 'portal', x: x + 1, to: 'ship' }); add({ t: 'portal', x: x + len - 1, to: 'cube' });
@@ -68,6 +71,8 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
     else if ((m = /^g(\d)$/.exec(tok))) C.gap(+m[1]);
     else if ((m = /^b(\d)(\d)$/.exec(tok))) C.block(+m[1], +m[2]);
     else if ((m = /^gs(\d)(\d)$/.exec(tok))) C.gs(+m[1], +m[2]);
+    else if ((m = /^fl(\d)$/.exec(tok))) C.fl(+m[1]);
+    else if ((m = /^fs(\d)(\d)$/.exec(tok))) C.fs(+m[1], +m[2]);
     else if ((m = /^ss(\d)(\d)(\d)$/.exec(tok))) C.ss(+m[1], +m[2], +m[3]);
     else if (tok.startsWith('ship:')) C.ship([...tok.slice(5)].map(Number));
     else if (['dbl', 'stairs', 'pad', 'padh', 'bsp', 'rest'].includes(tok)) C[tok]();
@@ -85,13 +90,13 @@ const OFFICIAL = [
   // The levels are a ramp: tempo never drops from one level to the next, and the "pressure" score (hazards per second, each weighted by how narrow its window is;
   // see pressureOf in tests/suite.js) rises by at least a notch every level, from First Hop to Slime Queen. The suite fails if a change breaks that.
   ['First Hop', 1, [0, 1, 2], 's1 s1 s2 s1 b21 s2 s1 s2 b21 s2 g2 s1', 100, 0, true, .04],
-  ['Candy Steps', 1, [2, 0, 1], 'b21 s2 stairs s1 b32 s2 stairs b21 s2 bsp s2 stairs g3 s2', 102, 4, true, .04],
+  ['Candy Steps', 1, [2, 0, 1], 'b21 s2 stairs s1 b32 s2 stairs b21 s2 bsp s2 stairs g3 s2', 101, 4, true, .04],
   ['Jelly Bounce', 2, [1, 4, 0], 'pad s2 padh ss232 pad gs32 g4 padh bsp pad gs32 padh ss212 g4 pad dbl', 106, 2, false, .05],
   ['Gap Year', 2, [3, 1, 4], 'g3 s2 g4 ss232 ss212 g4 gs33 s2 g4 gs32 dbl g4 s2 ss212', 108, 3, false, .06],
   ['Little Ship', 2, [4, 0, 2], 'ss212 ss232 ship:21312 ss232 ss212 ship:13231 ss212 s2 gs31 ss232 gs32', 110, 4, false, .05],
   ['Sugar Rush', 3, [2, 5, 3], 's2 dbl g4 ss232 stairs gs32 pad ss232 g4 ss212 stairs s3 pad gs31 g4 s3 dbl s2', 116, 0, false, .06],
   ['Bubble Tea', 3, [3, 4, 5], 'padh ss212 pad ss232 gs32 padh s3 pad stairs g4 padh ss232 gs31 pad ss232 g4 padh ss321 s2 gs31', 116, 2, false, .07],
-  ['Cloud Nine', 3, [1, 3, 0], 'ss212 ship:30413 ss232 ship:34021 ss232 gs32 ship:3102034 ss212 ss232 gs31 ss232 ss212 gs31', 112, 4, false, .05],
+  ['Cloud Nine', 3, [1, 3, 0], 'ss212 ship:30413 ss232 ship:34021 ss232 gs32 ship:3102034 ss212 ss232 gs31 ss232 ss212 gs31', 115, 4, false, .05],
   ['Sparkle Storm', 4, [5, 4, 1], 'ss232 dbl s3 ss232 stairs ss212 g5 ss121 s2 bsp dbl gs32 pad ss212 gs32 s3 g4', 116, 1, false, .06],
   ['Heartbreaker', 4, [0, 5, 4], 's2 g4 ss212 stairs padh ss232 ship:1304031 ss232 gs32 ss212 padh stairs gs32 s3 ss232 g5 ship:2040402 gs32 ss321', 122, 3, false, .07],
   ['Moonlit Mochi', 4, [4, 3, 1], 'padh ss321 ship:2231320413 ss232 ss232 gs31 stairs ss331 ship:3120413024 padh ss232 g5 ss321 s3', 124, 5, false, .07],
@@ -103,9 +108,13 @@ const OFFICIAL = [
   ['Welcome', 1, [0, 1, 3], 'h0 rest h1 s1 s1 h2 s2 h3 g3 h4 b21 s1 h5 padh h6 og5 h7 s1 rest', 92, 4, true, .09, { tutorial: true, hints: [
     'Tap anywhere to jump over the gumdrops!', 'Hearts are bonus points — grab a few', 'Hold the screen to keep hopping', 'Gaps: jump just before the edge — you get a tiny grace after it',
     'Land on blocks and keep going', 'Pads launch you — just ride them', 'Orbs: tap while touching one for an extra jump', 'Tap on the beat for PERFECT timing. You have got this!'] }],
+  // the squish power (appended, so every saved id stays valid; slotted into the order below): hold Squish to flatten and slip under gummy gates (fl = a gate, fs = a gate then a spike)
+  ['Puddle Hop', 1, [0, 2, 1], 'h0 fl2 h1 fl3 s2 fl2 fl3 h2 fs23 fl2 fs33', 103, 1, false, .06, { hints: [
+    'New move! Hold SQUISH to flatten and slip under the gummy gates, then let go', 'Hearts hide under the gates: squish to get them!', 'Squish, let go, then hop the gumdrop'] }],
+  ['Gummy Gates', 3, [1, 3, 4], 'fl2 s2 fs23 fl3 ss212 fs22 fl2 g3 fs23 fl3 fs32 s2 fs22', 110, 9, false, .06],
 ].map(([n, st, pal, sc, bpm, sty, auto, coy, extra], i) => genLevel('o' + i, n, st, pal, sc, bpm, sty, auto !== false, coy, extra));
 const moveBefore = (id, beforeName) => { const [l] = OFFICIAL.splice(OFFICIAL.findIndex(q => q.id === id), 1); OFFICIAL.splice(OFFICIAL.findIndex(q => q.name === beforeName), 0, l); };
-moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush');
+moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush'); moveBefore('o15', 'Jelly Bounce'); moveBefore('o16', 'Orb Orchard');
 /* Hearts that no winning run can take together with the rest (the arc's low end hearts sit where the jump over the hazard has already lifted you), found with
    heartsSync() in solver.js (at Chill, Normal and Spicy pace) and removed so every official level can be finished with all of its hearts at every speed.
    [x, y] in level units. The test suite re-runs the search,
@@ -124,19 +133,21 @@ const WORLDS = [
   { id: 'night', name: 'Night Garden', tag: 'moonlight, music boxes and mochi', pal: [6, 4, 5], amb: 'night' },
   { id: 'slime', name: 'Slime Palace', tag: 'the queen is home', pal: [7, 3, 1], amb: 'slime' },
 ];
-const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Jelly Bounce': 0, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4 };
-const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8 };   // indexes into STYLES (music.js)
+const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4 };
+const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8 };   // indexes into STYLES (music.js)
 for (const L of OFFICIAL) { L.world = WORLD_OF[L.name]; L.style = LEVEL_STYLE[L.name]; L.pal = WORLDS[L.world].pal.slice(); }
 
 /* ---------- live world built from the current level ---------- */
 const solids = [], spikes = [], pads = [], hearts = [], gaps = [], portals = [], orbs = [], clusters = [];
+let hasGate = false;   // this level uses the squish power: the Squish button shows and the solver also tries flattening
 let curLevel = OFFICIAL[0], FINISH = OFFICIAL[0].len * T;
 function buildLevel(L, usePace = false) {
   solids.length = spikes.length = pads.length = hearts.length = gaps.length = portals.length = orbs.length = 0;
   curLevel = L; FINISH = L.len * T; curBpm = (L.bpm || BASE_BPM) * (usePace ? (store.pace || 1) : 1); applyTempo(curBpm); autoHold = L.auto !== false; COY = L.coy || DEF_COY; clusters.length = 0;
-  const cells = new Set(), gapCols = new Set();
+  const cells = new Set(), gapCols = new Set(), gateCols = new Set();
   for (const o of L.objs) {
     if (o.t === 'block') cells.add(o.x + ',' + o.y);
+    else if (o.t === 'gate') gateCols.add(o.x);
     else if (o.t === 'spike') spikes.push({ x: o.x * T, base: GY - o.y * T });
     else if (o.t === 'pad') pads.push({ x: o.x * T, base: GY - o.y * T, sq: 0, cool: 0 });
     else if (o.t === 'heart') hearts.push({ x: (o.x + .5) * T, y: GY - (o.y + .5) * T, got: false });
@@ -165,6 +176,9 @@ function buildLevel(L, usePace = false) {
   solids.push({ x0: sx, x1: FINISH + 1500, top: GY, h: 99, ground: true });
   // ceilings for ship sections
   for (let i = 0; i < portals.length; i++) if (portals[i].to === 'ship') { const nx = portals.slice(i + 1).find(p => p.to === 'cube'); solids.push({ x0: portals[i].x, x1: nx ? nx.x : FINISH, top: -400, h: 0, bot: CEIL, ceil: true }); }
+  { const gc = [...gateCols].sort((a, b) => a - b); let a = null, p = null;   // gummy gates: a run of columns is one gate, from the top of the screen down to GATE_GAP above the floor
+    for (let i = 0; i <= gc.length; i++) { const c = gc[i]; if (c !== undefined && p !== null && c === p + 1) { p = c; continue; } if (a !== null) solids.push({ x0: a * T, x1: (p + 1) * T, top: -400, h: 0, bot: GY - GATE_GAP, ceil: true, gate: true }); a = c === undefined ? null : c; p = a; } }
+  hasGate = solids.some(s => s.gate);
   solids.forEach(s => { if (s.bot == null) s.bot = s.top + s.h * T; });
   // Hazard clusters with their IDEAL takeoff (player-centre tile) and safe window (tiles). Measured by sweeping every possible press:
   // spikes: window 2.72-(n-1), ideal a-1.65+(n-1)/2 | gaps: window 5.44-n, ideal a-1.96+n/2 | ground blocks: ~3.5 wide, ideal a-2.49.

@@ -10,7 +10,7 @@ function* solveGen() {
   const sv = { state, mode, ghost, P: { ...P }, held: inp.held, buf: inp.buf };
   try {
     mode = 'dash'; ghost = 0;
-    Object.assign(P, { wx: 0, form: 'cube', h: CUBE_H, y: GY - CUBE_H, vy: 0, grounded: true, coy: COY });
+    Object.assign(P, { wx: 0, form: 'cube', flat: false, h: CUBE_H, y: GY - CUBE_H, vy: 0, grounded: true, coy: COY });
     pads.forEach(p => { p.cool = 0; p.sq = 0; }); orbs.forEach(o => { o.used = false; });
     const snap = () => ({ P: { ...P }, pc: pads.map(p => p.cool), oc: orbs.map(o => o.used), h: inp.held });
     const rest = s => { Object.assign(P, s.P); pads.forEach((p, i) => { p.cool = s.pc[i]; }); orbs.forEach((o, i) => { o.used = s.oc[i]; }); };
@@ -19,12 +19,12 @@ function* solveGen() {
     const report = ok => { let mn = 1e9, at = 0; for (const [n, w] of sizes) if (w > FINISH * .04 && n < mn) { mn = n; at = w / FINISH; } return { ok, pct: ok ? 100 : Math.floor(maxwx / FINISH * 100), tightest: mn === 1e9 ? 0 : mn, tightestAtPct: Math.round(at * 100), sizes }; };
     for (let it = 0; layer.length && it < 60000; it++) {
       const next = new Map();
-      for (const s of layer) for (let hold = 0; hold < 2; hold++) {
-        rest(s); inp.held = !!hold; inp.buf = (!autoHold && hold && !s.h) ? .12 : 0; inp.pt = -1; state = 'play'; let dead = false;   // tap levels: a press = the rising edge of "hold"
+      for (const s of layer) for (let hold = 0; hold < 2; hold++) for (let fl = 0; fl < (hasGate ? 2 : 1); fl++) {   // (fl: also try squishing, on levels that have gummy gates)
+        rest(s); inp.held = !!hold; inp.buf = (!autoHold && hold && !s.h) ? .12 : 0; inp.pt = -1; inp.flat = !!fl; state = 'play'; let dead = false;   // tap levels: a press = the rising edge of "hold"
         for (let k = 0; k < 4; k++) { stepPlayer(STEP, SPEED, true); if (state === 'win') return report(true); if (state !== 'play') { dead = true; break; } }
         if (dead) continue;
         let spent = 0; for (const o of orbs) if (o.used) spent++;
-        const key = P.form + Math.round(P.y / 5) + ':' + Math.round(P.vy / 50) + (P.grounded ? 'g' : 'a') + (!autoHold ? (hold ? 'h' : 'n') : '') + (spent ? 'o' + spent : '');
+        const key = P.form + Math.round(P.y / 5) + ':' + Math.round(P.vy / 50) + (P.grounded ? 'g' : 'a') + (!autoHold ? (hold ? 'h' : 'n') : '') + (spent ? 'o' + spent : '') + (P.flat ? 'f' : '');
         if (!next.has(key)) next.set(key, snap());
       }
       layer = [...next.values()]; sizes.push([layer.length, layer.length ? layer[0].P.wx : 0]);
@@ -33,7 +33,7 @@ function* solveGen() {
       if (it % 8 === 0) { state = 'solving'; yield maxwx / FINISH; }   // the steps above leave state at 'play': put the screen back before handing control to the frame loop, or the check never shows and the editor starts running the level
     }
     return report(false);
-  } finally { HB = hbSave; simming = false; state = sv.state; mode = sv.mode; ghost = sv.ghost; Object.assign(P, sv.P); inp.held = sv.held; inp.buf = sv.buf; }
+  } finally { HB = hbSave; simming = false; state = sv.state; mode = sv.mode; ghost = sv.ghost; Object.assign(P, sv.P); inp.held = sv.held; inp.buf = sv.buf; inp.flat = false; }
 }
 // the narrowest takeoff window among the simple hazards (spike groups, gaps, blocks) in the current level, in ms at its tempo
 function tightNote() {
@@ -55,7 +55,7 @@ function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buil
   const sv = { state, mode, ghost, P: { ...P }, held: inp.held, buf: inp.buf };
   try {
     mode = 'dash'; ghost = 0;
-    Object.assign(P, { wx: 0, form: 'cube', h: CUBE_H, y: GY - CUBE_H, vy: 0, grounded: true, coy: COY });
+    Object.assign(P, { wx: 0, form: 'cube', flat: false, h: CUBE_H, y: GY - CUBE_H, vy: 0, grounded: true, coy: COY });
     pads.forEach(p => { p.cool = 0; p.sq = 0; }); orbs.forEach(o => { o.used = false; });
     const NW = Math.ceil(hearts.length / 32) || 1;
     const pop = m => { let c = 0; for (let i = 0; i < NW; i++) { let v = m[i]; while (v) { v &= v - 1; c++; } } return c; };
@@ -65,8 +65,8 @@ function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buil
     let layer = [{ s: snap(), m: new Int32Array(NW), c: 0 }], best = null, won = false, maxwx = 0;
     for (let it = 0; layer.length && it < 60000 && !won; it++) {
       const next = new Map();
-      for (const r of layer) for (let hold = 0; hold < 2; hold++) {
-        rest(r.s); inp.held = !!hold; inp.buf = (!autoHold && hold && !r.s.h) ? .12 : 0; inp.pt = -1; state = 'play'; let dead = false;
+      for (const r of layer) for (let hold = 0; hold < 2; hold++) for (let fl = 0; fl < (hasGate ? 2 : 1); fl++) {   // (fl: also try squishing, on levels that have gummy gates)
+        rest(r.s); inp.held = !!hold; inp.buf = (!autoHold && hold && !r.s.h) ? .12 : 0; inp.pt = -1; inp.flat = !!fl; state = 'play'; let dead = false;
         hearts.forEach(h => { h.got = false; });
         for (let k = 0; k < 4; k++) { stepPlayer(STEP, SPEED, true); if (state === 'win') break; if (state !== 'play') { dead = true; break; } }
         if (dead) continue;
@@ -74,7 +74,7 @@ function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buil
         const c = pop(m);
         if (state === 'win') { won = true; if (!best || c > best.c) best = { c, m }; continue; }
         let spent = 0; for (const o of orbs) if (o.used) spent++;
-        const key = P.form + Math.round(P.y / 5) + ':' + Math.round(P.vy / 50) + (P.grounded ? 'g' : 'a') + (!autoHold ? (hold ? 'h' : 'n') : '') + (spent ? 'o' + spent : '');
+        const key = P.form + Math.round(P.y / 5) + ':' + Math.round(P.vy / 50) + (P.grounded ? 'g' : 'a') + (!autoHold ? (hold ? 'h' : 'n') : '') + (spent ? 'o' + spent : '') + (P.flat ? 'f' : '');
         const arr = next.get(key) || []; next.set(key, arr);
         if (arr.some(q => subset(m, q.m))) continue;
         const kept = arr.filter(q => !subset(q.m, m)); kept.push({ s: snap(), m, c });
@@ -88,7 +88,7 @@ function* heartsGen(keep = 6, cap = Infinity) {   // runs on the level that buil
     if (!best) return { ok: false, total: hearts.length, best: 0, missed: [] };
     const missed = []; hearts.forEach((h, i) => { if (!(best.m[i >> 5] & (1 << (i & 31)))) missed.push({ x: Math.round((h.x / T - .5) * 1000) / 1000, y: Math.round(((GY - h.y) / T - .5) * 1000) / 1000 }); });
     return { ok: true, total: hearts.length, best: best.c, missed };
-  } finally { HB = hbSave; simming = false; state = sv.state; mode = sv.mode; ghost = sv.ghost; Object.assign(P, sv.P); inp.held = sv.held; inp.buf = sv.buf; hearts.forEach(h => { h.got = false; }); }
+  } finally { HB = hbSave; simming = false; state = sv.state; mode = sv.mode; ghost = sv.ghost; Object.assign(P, sv.P); inp.held = sv.held; inp.buf = sv.buf; inp.flat = false; hearts.forEach(h => { h.got = false; }); }
 }
 function heartsSync(L, keep = 6) {   // synchronous version, for tests
   buildLevel(L); const g = heartsGen(keep); let r; while (!(r = g.next()).done); return r.value;

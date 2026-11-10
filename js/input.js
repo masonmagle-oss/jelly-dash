@@ -4,6 +4,8 @@
 
 /* ================= input ================= */
 const JUMP_KEYS = ['Space', 'ArrowUp', 'KeyW', 'Enter'];
+const SQUISH_KEYS = ['ArrowDown', 'KeyS', 'ShiftLeft', 'ShiftRight'];   // hold to flatten (the squish power)
+let flatPtr = null;   // the finger / mouse button holding the on-screen Squish button
 function pmap(e) {
   const r = cv.getBoundingClientRect();
   if (portrait) { const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), cw = cv.offsetWidth, ch = cv.offsetHeight; return [(dy + cw / 2) / cw * VW - VX, (ch / 2 - dx) / ch * H]; }   // undo the quarter turn
@@ -82,10 +84,11 @@ addEventListener('keydown', e => {
     else if (e.code === 'KeyR') roomReset();
     return;
   }
-  if (JUMP_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) press(); }
+  if (SQUISH_KEYS.includes(e.code)) { e.preventDefault(); inp.flat = true; }
+  else if (JUMP_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) press(); }
   else if (e.code === 'KeyR' && (state === 'play' || state === 'dead')) restartRun();
 });
-addEventListener('keyup', e => { if (JUMP_KEYS.includes(e.code)) inp.held = false; });
+addEventListener('keyup', e => { if (JUMP_KEYS.includes(e.code)) inp.held = false; if (SQUISH_KEYS.includes(e.code)) inp.flat = false; });
 /* ---------- browser gestures the game must never trigger ----------
    Pinch / double-tap zoom, text selection, image dragging and the long-press menu would all steal touches from play. CSS (touch-action, user-select,
    touch-callout, see index.html) does most of it; these cover Safari's gesture events and older browsers. The page never scrolls, so touchmove is always cancelled. */
@@ -145,6 +148,7 @@ cv.addEventListener('pointerdown', e => {
     sfx.click(); if (menuArm > 0) { menuArm = 0; leaveRun(); } else { menuArm = 2; say('Tap ☰ again to leave', 2); } return;
   }
   try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  if (state === 'play' && hasGate && mouse.x >= SQB.x && mouse.x <= SQB.x + SQB.w && mouse.y >= SQB.y - 14 && mouse.y <= SQB.y + SQB.h + 14) { flatPtr = e.pointerId; inp.flat = true; return; }   // the on-screen Squish button: its own finger, so the other hand keeps jumping
   touchPtrs.set(e.pointerId, { x: mouse.x });
   if (mode === 'practice' && (state === 'play' || state === 'dead')) { const b = hitUi(); if (b) { b.fn(); return; } }   // the practice buttons
   const sc = SCREENS[state]; if (sc) sc.down(e); else press();
@@ -157,6 +161,8 @@ addEventListener('pointermove', e => {
 addEventListener('wheel', e => { if (state === 'edit') edScroll = clamp(edScroll + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / T / 2, 0, Math.max(0, edLevel.len - 20)); }, { passive: true });
 function release(e) {
   const id = e && e.pointerId != null ? e.pointerId : null;
+  if (id === null) { inp.flat = false; flatPtr = null; }   // (window blur)
+  else if (id === flatPtr) { inp.flat = false; flatPtr = null; return; }   // letting go of the Squish button must not stop a jump the other finger is holding
   if (dragSlider) { dragSlider = null; persist(); }
   inp.held = false; mouse.down = false; edPaint = null; edPan = null; holdCancel(id);
   if (id == null) touchPtrs.clear(); else touchPtrs.delete(id); if (touchPtrs.size < 2) panMid = null;

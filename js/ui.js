@@ -323,8 +323,19 @@ function practiceHud() {
   btn('Auto ' + (auto ? 'on' : 'off'), 276, 468, 112, 44, () => { store.autoCp = !auto; persist(); sfx.click(); say(store.autoCp ? 'Auto checkpoints on' : 'Auto checkpoints off', 1.2); }, { size: 17, clip, on: auto });
   txt('◆ ' + pcp.length, 412, 491, 22, '#fff', C.plum, 'left');
 }
+const SQB = { x: W - 176, y: 440, w: 152, h: 78 };   // the on-screen Squish button (levels with gummy gates): hold it with one thumb, tap anywhere else to jump with the other
+function squishButton() {
+  const on = inp.flat, b = SQB, g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+  g.addColorStop(0, on ? '#ff5fb0' : '#ffffff'); g.addColorStop(1, on ? '#c86bff' : '#ffd1ec');
+  ctx.save(); ctx.globalAlpha = .94; ctx.fillStyle = g; rr(b.x, b.y + (on ? 5 : 0), b.w, b.h - (on ? 5 : 0), 24); ctx.fill();
+  ctx.strokeStyle = on ? '#fff' : '#ff8fc7'; ctx.lineWidth = 4; ctx.stroke(); ctx.globalAlpha = 1;
+  txt('SQUISH', b.x + b.w / 2, b.y + 32 + (on ? 5 : 0), 28, on ? '#fff' : C.pink, on ? C.plum : '#fff');
+  txt(isTouchUi() ? 'hold to flatten' : 'hold S / ↓ / Shift', b.x + b.w / 2, b.y + 60 + (on ? 5 : 0), 15, on ? '#fff' : C.plum);
+  ctx.restore();
+}
 function hud() {
   if (['title', 'room', 'select', 'edit', 'solving'].includes(state)) return;
+  if (hasGate && (state === 'play' || state === 'dead')) squishButton();
   const prog = clamp(P.wx / FINISH, 0, 1), bx = W / 2 - 200, by = 20, bw = 400, bh = 14;
   ctx.fillStyle = 'rgba(255,255,255,.6)'; rr(bx, by, bw, bh, 7); ctx.fill();
   const g = ctx.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, '#ff9ccf'); g.addColorStop(1, '#c86bff');

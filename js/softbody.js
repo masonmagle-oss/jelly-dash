@@ -164,6 +164,7 @@ const GAMEBODY = { name: 'game', kp: 2600, ke: .96, ks: .12, ksk: .4, damp: .993
 const noCollide = () => false;
 function resolveWorld(x, y) {
   for (const s of solids) {
+    if (s.gate) continue;   // the jelly's drawn body passes through a gummy gate (the squish is drawn as a flattening, not a physical crush)
     if (x <= s.x0 || x >= s.x1 || y <= s.top || y >= s.bot) continue;
     const up = y - s.top, dn = s.bot - y, l = x - s.x0, r = s.x1 - x, m = Math.min(up, dn, l, r);
     if (m === up) { CR[0] = 0; CR[1] = -1; CR[2] = up; } else if (m === dn) { CR[0] = 0; CR[1] = 1; CR[2] = dn; } else if (m === l) { CR[0] = -1; CR[1] = 0; CR[2] = l; } else { CR[0] = 1; CR[1] = 0; CR[2] = r; }

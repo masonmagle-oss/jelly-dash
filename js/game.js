@@ -28,12 +28,12 @@ function drawHolds() {   // a ring that fills while a long-press is charging, so
 /* ================= state ================= */
 let state = 'title', mode = 'dash', attempts = 1, deadT = 0, winT = 0, shake = 0, tg = 0, titleT = 0, got = 0, lastPct = 0;
 let ghost = 0, ghostX = 0, cpT = 0, lastSq = 0, cps = [], testing = false, humOn = 0, toast = { t: '', life: 0 };
-const inp = { held: false, buf: 0, pt: -1 };   // pt: game-time of the last press, so a mid-frame input can be back-dated
+const inp = { held: false, buf: 0, pt: -1, flat: false };   // flat: the Squish button / key is held (the squish power, see setFlat)   // pt: game-time of the last press, so a mid-frame input can be back-dated
 let frameAcc = 0, frameNowWall = 0;
 const gameNow = () => P.wx / SPEED + frameAcc + (performance.now() - frameNowWall) / 1000;   // simulated time + the part of the frame not simulated yet
 const mouse = { x: -1, y: -1, down: false };
 let menuArm = 0;   // > 0 for two seconds after the first tap on the in-run menu button
-const P = { wx: 0, y: GY - CUBE_H, vy: 0, w: 36, h: CUBE_H, grounded: true, coy: 0, form: 'cube', ledgeX: null, ledgeY: 0 };
+const P = { wx: 0, y: GY - CUBE_H, vy: 0, w: 36, h: CUBE_H, grounded: true, coy: 0, form: 'cube', ledgeX: null, ledgeY: 0, flat: false };
 const parts = [];
 const OS_REDUCE = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const reduceMotion = () => SET().reduceMotion === null ? OS_REDUCE : SET().reduceMotion;   // shake, spin and most particles are skipped when on
@@ -68,7 +68,7 @@ const say = (t, life = 2.5) => { toast = { t, life }; };
 
 /* ================= game flow ================= */
 function resetRun() {
-  P.wx = 0; P.form = 'cube'; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
+  P.wx = 0; P.form = 'cube'; P.flat = false; P.h = CUBE_H; P.y = GY - P.h; P.vy = 0; P.grounded = true; P.coy = 0; P.ledgeX = null;
   SQ_.s = SQ_.v = SQ_.rot = SQ_.rv = SQ_.k = SQ_.kv = SQ_.pv = SQ_.pt = 0; SQ_.was = true; SQ_.lastVy = 0; landEvt = 0;
   got = 0; hearts.forEach(h => h.got = false); orbs.forEach(o => { o.used = false; }); pads.forEach(p => { p.sq = 0; p.cool = 0; });
   inp.buf = 0; inp.pt = -1; shake = 0; ghost = 0; cps = []; pcp = []; hintI = 0; pAutoX = 12 * T; cpT = 0; combo = 0; tuneI = 0; lastBeat = -1; placeJelly(); snapPrev();
@@ -95,7 +95,7 @@ function clearAhead() {
   const a = P.wx - 40, b = P.wx + 140;
   for (const s of spikes) if (s.x > a && s.x < b) return false;
   for (const g of gaps) if (g[1] > a && g[0] < b) return false;
-  for (const s of solids) if (!s.ground && !s.ceil && s.x1 > a && s.x0 < b) return false;
+  for (const s of solids) if (!s.ground && (!s.ceil || s.gate) && s.x1 > a && s.x0 < b) return false;
   for (const p of pads) if (p.x > a && p.x < b) return false;
   for (const o of orbs) if (o.x > a && o.x < b) return false;
   for (const p of portals) if (p.x > a - 60 && p.x < b) return false;
@@ -105,7 +105,7 @@ function zenRespawn() {
   const dx = P.wx; let c = null;
   for (let i = cps.length - 1; i >= 0; i--) if (cps[i].wx <= dx - 100) { c = cps[i]; break; }
   if (!c) c = cps[0] || { wx: 0, y: GY - CUBE_H, form: 'cube' };
-  P.wx = c.wx; P.form = c.form || 'cube'; P.h = P.form === 'ship' ? SHIP_H : CUBE_H; P.y = c.y; P.vy = 0; P.grounded = P.form === 'cube';
+  P.wx = c.wx; P.form = c.form || 'cube'; P.flat = false; P.h = P.form === 'ship' ? SHIP_H : CUBE_H; P.y = c.y; P.vy = 0; P.grounded = P.form === 'cube';
   // protected until you have carried on past the place you died, so a respawn can never loop on the same obstacle
   ghost = .45; ghostX = dx + 170; inp.buf = 0; placeJelly();
   cps = cps.filter(q => q.wx <= c.wx); sfx.bloop(0); snapPrev(); combo = 0; tuneI = 0; songStart(curLevel, P.wx / SPEED);   // music rewinds with you, staying on the grid
@@ -204,6 +204,7 @@ function jumpFx() {
   // an input that arrived mid-frame is back-dated: the arc starts at the real press time, not at the next physics step
   const pressed = inp.buf > 0, hasT = pressed && inp.pt >= 0, tNow = P.wx / SPEED, lag = hasT ? tNow - inp.pt : 0, tPress = hasT ? inp.pt : tNow;
   const scramble = !P.grounded && P.ledgeX != null && P.wx + P.w / 2 > P.ledgeX + 3;   // took off from past the ledge, on coyote time
+  if (P.flat) setFlat(false);   // a jump stands the jelly up first
   P.vy = -JUMP; P.grounded = false; P.coy = 0; inp.buf = 0; inp.pt = -1;
   if (lag > 0 && lag < .035) { P.y += P.vy * lag + .5 * G * lag * lag; P.vy += G * lag; }
   if (simming) return;
@@ -228,7 +229,7 @@ function ripple(x, y, power) { spawn({ type: 'ring', x, y, size: 30 + power * 50
 
 function formAt(cx) { let f = 'cube'; for (const p of portals) { if (p.x <= cx) f = p.to; else break; } return f; }
 function switchForm(f) {
-  const cy = P.y + P.h / 2; P.form = f; P.h = f === 'ship' ? SHIP_H : CUBE_H; P.y = cy - P.h / 2; P.grounded = false; P.coy = 0;
+  P.flat = false; const cy = P.y + P.h / 2; P.form = f; P.h = f === 'ship' ? SHIP_H : CUBE_H; P.y = cy - P.h / 2; P.grounded = false; P.coy = 0;
   if (f === 'ship') P.vy *= .5;
   if (simming) return;
   const pt = portals.find(p => p.to === f && Math.abs(p.x - (P.wx + P.w / 2)) < 60);
@@ -237,7 +238,17 @@ function switchForm(f) {
   sfx.portal(); jelly.heal(.5); jelly.kick(200, 120);
 }
 
+/* ---------- the squish power ----------
+   Hold Squish (S / Down / Shift, or the on-screen button) on the ground and the jelly flattens to FLAT_H: it slips under a gummy gate (GATE_GAP above the floor)
+   and keeps the same speed. A flat jelly stays flat while it is still under a gate (it cannot stand up into one); it stands the moment it is clear. In the air it
+   is always standing, and a jump stands it up first. Spikes still hurt a flat jelly (flattening is for gates, not a dodge). The squash is also drawn, see softAfterCore. */
+function standClear() { const L = P.wx + 3, R = P.wx + P.w - 3, top = P.y + P.h - CUBE_H; for (const s of solids) if (s.gate && R > s.x0 && L < s.x1 && top < s.bot) return false; return true; }
+function setFlat(f) {
+  if (P.flat === f) return; const b = P.y + P.h; P.flat = f; P.h = f ? FLAT_H : CUBE_H; P.y = b - P.h;
+  if (simming) return; if (f) { sfx.squish(520, 'jelly'); buzz(8); SQ_.v -= 3; } else { sfx.bloop(1); SQ_.v += 3; }
+}
 function moveCube(dt, speed, lethal) {
+  if (hasGate) { const want = inp.flat && P.grounded; if (want && !P.flat) setFlat(true); else if (!want && P.flat && standClear()) setFlat(false); }
   const pb0 = P.y + P.h;
   P.wx += speed * dt;
   const L = P.wx + 3, R = P.wx + P.w - 3;
@@ -254,7 +265,7 @@ function moveCube(dt, speed, lethal) {
   if (!P.grounded && mode === 'zen' && ghost > 0 && P.vy >= 0 && P.y + P.h >= GY && prevB <= GY + 14) { P.y = GY - P.h; P.vy = 0; P.grounded = true; }
   if (P.grounded) P.coy = COY; else P.coy -= dt;
   inp.buf -= dt;
-  if (state === 'play' && (inp.buf > 0 || (autoHold && inp.held)) && (P.grounded || P.coy > 0)) jumpFx();   // jumping stays on while Zen's ghost protection is active
+  if (state === 'play' && (inp.buf > 0 || (autoHold && inp.held)) && (P.grounded || P.coy > 0) && (!P.flat || standClear())) jumpFx();   // jumping stays on while Zen's ghost protection is active (a flat jelly under a gate cannot jump: there is no room)
   if (state === 'play' && P.y > H + 60) { die(); return false; }
   return true;
 }
@@ -329,7 +340,7 @@ function softAfterCore(dt, spd) {
       if (q.pt > 0 && (q.pt -= dt) <= 0) { q.v += q.pv; q.pv = 0; }   // the takeoff stretch comes a beat after the squat
       q.was = P.grounded; q.lastVy = P.vy;
       q.kv += (-3600 * q.k - 7 * q.kv) * dt; q.k = clamp(q.k + q.kv * dt, -.3, .3);   // the lean rings at about 9 Hz and fades in a third of a second
-      q.v += (-380 * q.s - 11 * q.v) * dt; q.s = clamp(q.s + q.v * dt, -.5, .34);   // a springier spring (less damping): it bounces back past round a few times
+      q.v += (-380 * (q.s - (P.flat ? -.46 : 0)) - 11 * q.v) * dt; q.s = clamp(q.s + q.v * dt, -.5, .34);   // (a flat jelly holds the squash: about half its height, so it fits the gate gap)   // a springier spring (less damping): it bounces back past round a few times
       if (!P.grounded && tumble && !reduceMotion()) { q.rot += Math.PI * G / JUMP * dt; q.rv = 0; }
       else { q.rot -= Math.round(q.rot / (Math.PI * 2)) * Math.PI * 2; q.rv += (-300 * q.rot - 18 * q.rv) * dt; q.rot += q.rv * dt; if (Math.abs(q.rot) < 1e-3 && Math.abs(q.rv) < .01) q.rot = q.rv = 0; }   // whole turns are forgotten on landing; what is left wobbles back to upright
     }

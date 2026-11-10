@@ -274,7 +274,7 @@ function drawParts(scroll) {
   ctx.globalAlpha = 1;
 }
 function drawWorld(scroll, th, withFinish = true) {
-  for (const s of solids) { if (s.x1 - scroll < -60 - VX || s.x0 - scroll > W + 60 + VX) continue; if (s.ground) drawGround(s, scroll, th); else if (s.ceil) drawCeil(s, scroll, th); else drawBlock(s, scroll, th); }
+  for (const s of solids) { if (s.x1 - scroll < -60 - VX || s.x0 - scroll > W + 60 + VX) continue; if (s.ground) drawGround(s, scroll, th); else if (s.gate) paintCeil(s, scroll, th); else if (s.ceil) drawCeil(s, scroll, th); else drawBlock(s, scroll, th); }
   for (const p of pads) drawPad(p, scroll);
   for (const o of orbs) drawOrb(o, scroll);
   if (mode === 'practice' && (state === 'play' || state === 'dead')) for (const c of pcp) drawCheckpoint(c, scroll);
