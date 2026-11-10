@@ -13,7 +13,7 @@
   /* ---------- data ---------- */
   test('official levels: unique ids, sane fields, tutorial first', () => {
     const ids = new Set(); for (const l of J.OFFICIAL) { ok(!ids.has(l.id), 'duplicate id ' + l.id); ids.add(l.id); ok(l.name && l.objs.length && l.len > 40, 'bad level ' + l.name); ok(l.stars >= 1 && l.stars <= 5, 'stars ' + l.name); ok(l.coy >= .03 && l.coy <= .12, 'coyote ' + l.name); }
-    eq(J.OFFICIAL.length, 15, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
+    eq(J.OFFICIAL.length, 17, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
     for (const id of ['o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11']) ok(ids.has(id), 'saved id kept: ' + id);
   });
   test('level share codes round-trip every official level', () => {
@@ -147,6 +147,32 @@
     const swing = (a, b) => { const g = hs.slice(landed + a, landed + b); return Math.max(...g) - Math.min(...g); };
     ok(landed > 0, 'it landed'); ok(swing(30, 60) >= .11, 'half a second on it is still swinging (' + swing(30, 60).toFixed(3) + ')'); ok(swing(60, 120) >= .03, 'a second on it still quivers (' + swing(60, 120).toFixed(3) + ')');
     ok(worstAr >= .6, 'it never folds (area ' + worstAr.toFixed(2) + ')'); ok(heals <= 5, 'it rarely needs healing (' + heals + ')'); ok(swing(300, 360) < .01, 'and it settles');
+  });
+  test('squish power: a flattened jelly fits under a gummy gate, a standing one does not, and the rules are fair', async () => {
+    const L = J.OFFICIAL.find(l => l.name === 'Puddle Hop'); ok(L && L.script.includes('fl'), 'Puddle Hop teaches the power');
+    const run = async (squish, jumpSpikes = true) => {   // a scripted player: squish from a beat before each gate until just past it, hop the gumdrops
+      await J.startLevel(L, 'dash', false); const out = { flatH: [], blockedStand: false, got: 0 };
+      for (let i = 0; i < 12000 && J.state === 'play'; i++) {
+        const x = J.P.wx, gs = J.solids.filter(s => s.gate), under = gs.some(s => x + 36 > s.x0 && x < s.x1 + 3);
+        J.inp.flat = squish && gs.some(s => x + 36 > s.x0 - 70 && x < s.x1 + 30);
+        if (jumpSpikes && J.P.grounded && J.spikes.some(s => s.x > x + 36 && s.x - (x + 36) < 70)) J.press();
+        if (!J.inp.flat && under && J.P.flat) out.blockedStand = true;   // wanted to stand, was still under the gate: it stayed flat
+        J.update(J.STEP); if (J.P.flat) out.flatH.push(J.P.h);
+      }
+      out.state = J.state; out.pct = Math.round(J.P.wx / J.FINISH * 100); J.inp.flat = false; return out;
+    };
+    const no = await run(false), yes = await run(true);
+    eq(no.state, 'dead', 'without squishing the first gate stops you'); ok(no.pct < 30, 'at the first gate (' + no.pct + '%)');
+    eq(yes.state, 'win', 'with squishing the level is won'); ok(yes.flatH.length > 100 && yes.flatH.every(h => h === FLAT_H), 'a flat jelly is FLAT_H tall');
+    // rules: flat only on the ground, a jump stands it up, spikes still hurt it, and the body is back to full size afterwards
+    await J.startLevel(L, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.held = false; J.inp.flat = true; for (let i = 0; i < 6; i++) J.update(J.STEP); ok(J.P.flat && J.P.h === 20 && J.P.y + J.P.h === GY, 'flat on the floor, feet stay put');
+    J.press(); for (let i = 0; i < 4; i++) J.update(J.STEP); ok(!J.P.flat && J.P.h === CUBE_H, 'a jump stands the jelly up'); ok(!J.P.grounded, 'and it is in the air');
+    for (let i = 0; i < 30; i++) J.update(J.STEP); ok(!J.P.flat, 'flat is ground-only: holding Squish in the air does not flatten'); J.inp.flat = false;
+    await J.startLevel(L, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.held = false; J.inp.flat = true; const sp = J.spikes[0]; ok(sp, 'has a spike'); let died = false; for (let i = 0; i < 6000 && J.state === 'play'; i++) J.update(J.STEP); J.inp.flat = false;
+    eq(J.state, 'dead', 'a flat jelly sliding into a spike still dies (squishing is not a dodge)');
+    // the other levels do not change: no gates means no squish button and no extra solver actions
+    for (const n of ['First Hop', 'Slime Queen']) { J.buildLevel(J.OFFICIAL.find(l => l.name === n)); ok(!hasGate, n + ' has no gates'); }
+    J.buildLevel(L); ok(hasGate, 'a level with gates shows the Squish button'); J.resetRun();
   });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
     eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
@@ -358,6 +384,7 @@
     const add = ms => { w += 1000 / ms; n++; tight = Math.min(tight, ms); };
     for (const c of clusters) { if (c.ship || (c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45)); }
     J.pads.forEach(() => add(300 / K)); for (const o of L.objs) if (o.t === 'orb') add(180 / K);
+    for (const s of solids) if (s.gate) add(215 / K);   // a gummy gate: squish in time (about a fifth of a second of room at 112 BPM)
     for (const m of L.script.matchAll(/ship:(\d+)/g)) [...m[1]].map(Number).forEach((s, i, a) => add(Math.max(120, 330 - 45 * Math.abs(s - (i ? a[i - 1] : 2))) / K));
     return { P: w / (L.len * T / (360 * K)), secs: L.len * T / (360 * K), n, tight };
   };
