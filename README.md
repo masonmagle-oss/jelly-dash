@@ -25,7 +25,7 @@ After changing any file, bump `CACHE` in `sw.js` (for example `jelly-dash-v3`) s
 
 ## Tests
 
-Open `tests.html` in a browser (served over http) for the 55 in-page checks, or add `?full` to prove every level at every pace. For a command-line run:
+Open `tests.html` in a browser (served over http) for the in-page checks, or add `?full` to prove every level at every pace. For a command-line run:
 
 ```bash
 npm i playwright

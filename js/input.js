@@ -60,9 +60,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM' && state !== 'edit') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; return; }
   if (state === 'title') {
     initAudio();
-    if (e.code === 'Digit1' || e.code === 'Enter') { pickFor = 'play'; mode = 'dash'; state = 'select'; } else if (e.code === 'Digit2') { pickFor = 'play'; mode = 'zen'; state = 'select'; }
-    else if (e.code === 'Digit3') { pickFor = 'play'; mode = 'practice'; state = 'select'; }
-    else if (e.code === 'Digit4') enterRoom(); else if (e.code === 'Digit5') startStudio(); else if (e.code === 'Digit6') { pickFor = 'edit'; state = 'select'; }
+    const k = TITLE_KEYS[e.code]; if (k) k();
     return;
   }
   if (state === 'solving') { if (e.code === 'Escape') cancelSolve(); return; }   // (also cancels the daily level's cooking)
@@ -107,6 +105,7 @@ const touchPtrs = new Map(); let edPan = null, panMid = null;
 const pressUi = () => { const b = hitUi(); if (b) b.fn(); };
 const SCREENS = {
   title: { down: pressUi }, select: { down: pressUi }, solving: { down: pressUi },
+  win: { down() { const b = hitUi(); if (b) b.fn(); else press(); } },   // the result buttons; a tap anywhere else continues, as it always did
   settings: {
     down() { const b = hitUi(); if (!b) return; if (b.slider) { dragSlider = b.slider; sliderTo(mouse.x); } else b.fn(); },
     move() { if (dragSlider) sliderTo(mouse.x); },
@@ -156,7 +155,7 @@ cv.addEventListener('pointerdown', e => {
 addEventListener('pointermove', e => {
   [mouse.x, mouse.y] = pmap(e); { const tp = touchPtrs.get(e.pointerId); if (tp) tp.x = mouse.x; }
   const sc = SCREENS[state]; if (sc && sc.move) sc.move(e);
-  cv.style.cursor = (state === 'title' || state === 'select' || state === 'edit') ? (hitUi() ? 'pointer' : 'default') : state === 'room' ? (hitUi() ? 'pointer' : (room.grabs.length || room.inds.length ? 'grabbing' : 'grab')) : 'default';
+  cv.style.cursor = (state === 'title' || state === 'select' || state === 'settings' || state === 'win' || state === 'edit') ? (hitUi() ? 'pointer' : 'default') : state === 'room' ? (hitUi() ? 'pointer' : (room.grabs.length || room.inds.length ? 'grabbing' : 'grab')) : 'default';
 });
 addEventListener('wheel', e => { if (state === 'edit') edScroll = clamp(edScroll + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / T / 2, 0, Math.max(0, edLevel.len - 20)); }, { passive: true });
 function release(e) {
