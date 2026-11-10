@@ -4,33 +4,81 @@
 
 /* ================= drawing: UI ================= */
 let ui = [];
+// One button for every screen. Options: sub (second line), on (selected), off (disabled), primary (the screen's main action: filled, white text), size / ssize / col / fill / r, clip (see hitRect).
 function btn(label, x, y, w, h, fn, o = {}) {
   if (o.off) { ctx.save(); ctx.globalAlpha = .4; fn = () => {}; }   // disabled: drawn faint and inert
-  const hov = !isTouchUi() && mouse.x > x && mouse.x < x + w && mouse.y > y && mouse.y < y + h, lift = hov ? -2 : 0;   // no hover on touch: it would stay lit after a tap
-  ctx.fillStyle = o.fill || (hov ? 'rgba(255,255,255,.96)' : C.card); rr(x, y + lift, w, h, o.r || 18); ctx.fill();
-  ctx.lineWidth = o.on ? 4 : 3; ctx.strokeStyle = o.on ? C.hot : (hov ? C.pink : C.blush); ctx.stroke();
-  if (o.sub) { txt(label, x + w / 2, y + h * .38 + lift, o.size || 24, o.col || C.pink, null); txt(o.sub, x + w / 2, y + h * .74 + lift, o.ssize || 15, C.mauve, null); }
-  else txt(label, x + w / 2, y + h / 2 + lift, o.size || 20, o.col || C.pink, null);
+  const hov = !o.off && !isTouchUi() && mouse.x > x && mouse.x < x + w && mouse.y > y && mouse.y < y + h, lift = hov ? -2 : 0, r = o.r || 18;   // no hover on touch: it would stay lit after a tap
+  ctx.fillStyle = o.primary ? 'rgba(150,40,150,.32)' : 'rgba(190,90,170,.2)'; rr(x, y + 4, w, h, r); ctx.fill();   // a soft ledge under every button, so it reads as pressable on any background
+  if (o.primary) { const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, hov ? '#ff86c6' : '#ff6fb8'); g.addColorStop(1, hov ? '#c06bff' : '#b455f0'); ctx.fillStyle = g; }
+  else ctx.fillStyle = o.fill || (hov ? 'rgba(255,255,255,.96)' : C.card);
+  rr(x, y + lift, w, h, r); ctx.fill();
+  ctx.lineWidth = o.on || o.primary ? 4 : 3; ctx.strokeStyle = o.primary ? '#fff' : o.on ? C.hot : (hov ? C.pink : C.blush); ctx.stroke();
+  const col = o.primary ? '#fff' : (o.col || C.pink), edge = o.primary ? C.plum : null;
+  if (o.sub) { txt(label, x + w / 2, y + h * .38 + lift, o.size || 24, col, edge); txt(o.sub, x + w / 2, y + h * .74 + lift, o.ssize || 15, o.primary ? '#fff' : C.mauve, o.primary ? '#a03c9c' : null); }
+  else txt(label, x + w / 2, y + h / 2 + lift, o.size || 20, col, edge);
   if (o.off) ctx.restore();
   ui.push({ x, y, w, h, fn, label, clip: o.clip });   // label: for tests and for describing the control
 }
+// A segmented control: one pill, one choice lit. items are [label, value]; every segment is its own finger-sized button.
+function seg(items, x, y, sw, h, cur, pick, o = {}) {
+  const n = items.length, w = sw * n;
+  ctx.fillStyle = 'rgba(190,90,170,.2)'; rr(x, y + 4, w, h, h / 2); ctx.fill();
+  ctx.fillStyle = C.card; rr(x, y, w, h, h / 2); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.blush; ctx.stroke();
+  items.forEach(([label, v], i) => {
+    const bx = x + i * sw, on = v === cur, hov = !isTouchUi() && mouse.x > bx && mouse.x < bx + sw && mouse.y > y && mouse.y < y + h;
+    if (on) { const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#ff6fb8'); g.addColorStop(1, '#c45cf0'); ctx.fillStyle = g; rr(bx + 4, y + 4, sw - 8, h - 8, (h - 8) / 2); ctx.fill(); }
+    else if (hov) { ctx.fillStyle = 'rgba(255,179,220,.45)'; rr(bx + 4, y + 4, sw - 8, h - 8, (h - 8) / 2); ctx.fill(); }
+    txt(label, bx + sw / 2, y + h / 2 + 1, o.size || 16, on ? '#fff' : C.pink, null);
+    ui.push({ x: bx, y, w: sw, h, label: label + (on ? ' (on)' : ''), fn: () => { if (!on) pick(v); } });
+  });
+}
+// A settings row: the name on the left, its state on the right (a switch, or a word for settings with more than two states). The whole row is the button.
+function settingRow(label, x, y, w, on, fn, word) {
+  const h = 46, hov = !isTouchUi() && mouse.x > x && mouse.x < x + w && mouse.y > y && mouse.y < y + h;
+  ctx.fillStyle = hov ? 'rgba(255,255,255,.98)' : 'rgba(255,255,255,.82)'; rr(x, y, w, h, 16); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = hov ? C.pink : C.blush; ctx.stroke();
+  txt(label, x + 18, y + h / 2 + 1, 19, C.pink, null, 'left');
+  if (word) txt(word, x + w - 18, y + h / 2 + 1, 18, on ? C.hot : C.mauve, null, 'right');
+  else {
+    const tw = 54, th = 28, tx = x + w - tw - 14, ty = y + (h - th) / 2;
+    if (on) { const g = ctx.createLinearGradient(tx, 0, tx + tw, 0); g.addColorStop(0, '#ff7ac0'); g.addColorStop(1, '#c45cf0'); ctx.fillStyle = g; } else ctx.fillStyle = 'rgba(190,160,205,.6)';
+    rr(tx, ty, tw, th, th / 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 3, 0, 7); ctx.fill();
+  }
+  ui.push({ x, y, w, h, fn, label: label + ': ' + (word || (on ? 'on' : 'off')) });
+}
+function panel(x, y, w, h, title) {   // a soft card that groups related controls
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; rr(x, y, w, h, 24); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.stroke();
+  if (title) txt(title, x + 22, y + 24, TS.body, C.mauve, null, 'left');
+}
 function stars(n, x, y, sz = 9) { for (let i = 0; i < 5; i++) { ctx.fillStyle = i < n ? C.gold : 'rgba(200,160,200,.45)'; sparklePath(x + i * sz * 2.1, y, sz); ctx.fill(); } }
 function bestOf(id) { return store.best[id] || 0; }
+// Where the player is: levels in world order, how many are beaten, and the first one that is not (null once everything is).
+const playOrder = () => WORLDS.flatMap((_, w) => OFFICIAL.filter(l => l.world === w));
+const beatenCount = () => OFFICIAL.filter(l => bestOf(l.id) >= 100).length;
+const nextUp = () => playOrder().find(l => bestOf(l.id) < 100) || null;
+const MODES = [['Dash', 'dash', 'the classic run'], ['Zen', 'zen', 'no oopsies, just vibes'], ['Practice', 'practice', 'drop checkpoints, learn at your pace']];
+function openLevels(forWhat) {   // the title's way into the level list
+  pickFor = forWhat; selPage = 0;
+  if (forWhat === 'play') { const n = nextUp(); selTab = 0; selWorld = n ? n.world : -1; if (!MODES.some(m => m[1] === mode)) mode = 'dash'; }
+  state = 'select';
+}
+const TITLE_KEYS = { Digit1: () => openLevels('play'), Enter: () => openLevels('play'), Digit2: () => enterRoom(), Digit3: () => startStudio(), Digit4: () => openLevels('edit') };
 
 function drawTitle() {
   ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-VX, 0, VW, H);
-  const word = 'Jelly Dash'; ctx.font = '700 70px Fredoka,"Trebuchet MS",sans-serif';
+  const word = 'Jelly Dash', calm = reduceMotion(); ctx.font = '700 76px Fredoka,"Trebuchet MS",sans-serif';
   const widths = [...word].map(ch => ctx.measureText(ch).width), total = widths.reduce((a, b) => a + b, 0);
   let x = W / 2 - total / 2;
-  [...word].forEach((ch, i) => { txt(ch, x + widths[i] / 2, 78 + Math.sin(tg * 3 + i * .6) * 7, 70, i % 2 ? C.pink : '#c86bff', '#fff'); x += widths[i]; });
-  txt('squishy physics platformer', W / 2, 124, 21, '#fff', C.plum);
-  const items = [['Dash', store.best.o14 ? 'the classic run' : 'new here? try the Welcome level first', () => { pickFor = 'play'; mode = 'dash'; state = 'select'; }], ['Zen', 'no oopsies, just vibes', () => { pickFor = 'play'; mode = 'zen'; state = 'select'; }],
-    ['Practice', 'checkpoints • learn a level at your pace', () => { pickFor = 'play'; mode = 'practice'; state = 'select'; }],
-    ['Squish Room', 'poke, drag & fling the jelly', enterRoom],
-    ['Squish Studio', 'knead shapes, build a song', () => startStudio()], ['Level Creator', 'build, test & share your own', () => { pickFor = 'edit'; state = 'select'; }]];
-  items.forEach((m, i) => btn(m[0], W / 2 - 340 + (i % 2) * 350, 150 + Math.floor(i / 2) * 98, 330, 86, () => { initAudio(); sfx.click(); m[2](); }, { sub: m[1], size: 24, ssize: 14 }));   // two columns of big buttons: finger-sized on a phone
+  [...word].forEach((ch, i) => { txt(ch, x + widths[i] / 2, 76 + (calm ? 0 : Math.sin(tg * 3 + i * .6) * 6), 76, i % 2 ? C.pink : '#c86bff', '#fff'); x += widths[i]; });
+  txt('a squishy rhythm platformer', W / 2, 126, 21, '#fff', C.plum);
+  // one main action, and it says where it leads; the three side rooms sit below it
+  const n = nextUp(), done = beatenCount(), all = OFFICIAL.length, go = fn => () => { initAudio(); sfx.click(); fn(); };
+  const sub = !done ? (n && n.tutorial ? 'start with the Welcome level' : 'pick your first level') : n ? 'next up: ' + n.name + '  •  ' + done + ' of ' + all + ' beaten' : 'all ' + all + ' levels beaten  •  chase the hearts';
+  btn('Play', W / 2 - 210, 158, 420, 96, go(() => openLevels('play')), { primary: true, sub, size: 38, ssize: 16, r: 30 });
+  const side = [['Squish Room', 'poke, drag & fling the jelly', enterRoom], ['Squish Studio', 'knead shapes, build a song', () => startStudio()], ['Level Creator', 'build, test & share levels', () => openLevels('edit')]];
+  side.forEach((m, i) => btn(m[0], W / 2 - 345 + i * 234, 276, 222, 82, go(m[2]), { sub: m[1], size: 22, ssize: 14, r: 22 }));
   btn('⚙ Settings', W - 148, 14, 132, 40, () => { sfx.click(); state = 'settings'; }, { size: 17, r: 16 });
-  txt(isTouchUi() ? 'tap to choose  •  headphones recommended' : '1-6 to choose  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
+  txt(isTouchUi() ? 'headphones recommended' : 'Enter to play  •  2-4 for the rooms  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
 }
 let dailyL = null;
 function selList() { return selTab === 0 ? OFFICIAL : store.custom; }
@@ -118,48 +166,49 @@ const worldDone = w => OFFICIAL.filter(l => l.world === w && (store.best[l.id] |
 const worldTotal = w => OFFICIAL.filter(l => l.world === w).length;
 function currentWorld() { if (selWorld >= 0) return selWorld; const i = WORLDS.findIndex((_, w) => worldDone(w) < worldTotal(w)); return i < 0 ? 0 : i; }
 function drawSelect() {
-  const official = selTab === 0, wi = currentWorld();
+  const official = selTab === 0, wi = currentWorld(), play = pickFor === 'play';
   const th = theme(.35 + Math.sin(tg * .2) * .3, official ? WORLDS[wi].pal : [0, 1, 2]);
   drawBg(tg * 25, th);
   ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(-VX, 0, VW, H);
-  txt(pickFor === 'edit' ? 'Pick a level to edit' : (mode === 'zen' ? 'Zen — pick a level' : mode === 'practice' ? 'Practice — pick a level' : 'Pick a level'), W / 2, 32, 32, C.pink, '#fff');
-  btn('Official', 132, 62, 140, 44, () => { selTab = 0; selPage = 0; }, { on: selTab === 0, size: 20 });
-  btn('My Levels (' + store.custom.length + ')', 278, 62, 176, 44, () => { selTab = 1; selPage = 0; }, { on: selTab === 1, size: 18 });
-  if (selTab === 1) btn('Paste code', 14, 62, 112, 44, () => { sfx.click(); pasteLevel(); }, { size: 15, r: 12 });
-  else if (pickFor === 'play') btn('★ Daily', 14, 62, 112, 44, () => { sfx.click(); startDaily(); }, { size: 15, r: 12 });
-  if (pickFor === 'play') {   // Pace rescales the tempo (and every timing window with it) without changing any layout
-    txt('Pace', 492, 85, TS.small, '#fff', C.plum);
-    [['Chill', .85], ['Normal', 1], ['Spicy', 1.12]].forEach(([nm, v], i) => btn(nm, 536 + i * 92, 62, 86, 44, () => { store.pace = v; persist(); sfx.click(); }, { size: 14, r: 12, on: Math.abs((store.pace || 1) - v) < .01 }));
+  // top row: what to play (the list, and today's level)
+  const md = MODES.find(m => m[1] === mode) || MODES[0];
+  txt(play ? 'Pick a level' : 'Pick a level to edit', W / 2, 26, 30, C.pink, '#fff');
+  txt(play ? md[0] + '  •  ' + md[2] : official ? 'an official level opens as your own remix' : 'open one of yours, or start fresh', W / 2, 53, TS.small, '#fff', C.plum);
+  seg([['Official', 0], ['My Levels (' + store.custom.length + ')', 1]], 20, 14, 142, 44, selTab, v => { selTab = v; selPage = 0; sfx.tap(); }, { size: 16 });
+  if (selTab === 1) btn('Paste a code', 790, 14, 150, 44, () => { sfx.click(); pasteLevel(); }, { size: 16, r: 16 });
+  else if (play) btn('★ Daily level', 790, 14, 150, 44, () => { sfx.click(); startDaily(); }, { size: 16, r: 16 });
+  if (official) {   // one chip per world, then one line about the chosen one (and what the marks on a card mean)
+    WORLDS.forEach((w, i) => btn((i + 1) + '  ' + w.name, 20 + i * 185, 72, 180, 50, () => { selWorld = i; sfx.tap(); }, { size: 15, r: 15, on: i === wi, sub: worldDone(i) + ' / ' + worldTotal(i) + ' beaten', ssize: 13 }));
+    txt(WORLDS[wi].tag, 24, 142, TS.body, '#fff', C.plum, 'left');
+    let lx = 936; txt('timing', lx, 142, TS.min, '#fff', C.plum, 'right'); lx -= 52; ctx.fillStyle = C.hot; heartPath(lx, 142, 6); ctx.fill();
+    lx -= 20; txt('difficulty', lx, 142, TS.min, '#fff', C.plum, 'right'); lx -= 72; ctx.fillStyle = C.gold; sparklePath(lx, 142, 7); ctx.fill();
   }
-  if (official) {   // one chip per world, then a banner for the chosen one
-    WORLDS.forEach((w, i) => btn((i + 1) + '  ' + w.name, 14 + i * 187, 116, 181, 50, () => { selWorld = i; sfx.tap(); }, { size: 15, r: 15, on: i === wi, sub: worldDone(i) + ' / ' + worldTotal(i) + ' beaten', ssize: 13 }));
-    txt('World ' + (wi + 1) + ' · ' + WORLDS[wi].name, 24, 186, 28, '#fff', C.plum, 'left'); txt(WORLDS[wi].tag, 24 + 8, 214, TS.small, '#fff', C.plum, 'left');
-  }
-  const list = (official ? selList().filter(l => l.world === wi) : selList().slice()), cards = [];
-  if (pickFor === 'edit' && selTab === 1) cards.push({ nw: true });
-  if (pickFor === 'edit' && selTab === 1 && edLevel && edDirty) cards.push({ cont: true });
+  const list = (official ? selList().filter(l => l.world === wi) : selList().slice()), cards = [], nx = play ? nextUp() : null;
+  if (!play && selTab === 1) cards.push({ nw: true });
+  if (!play && selTab === 1 && edLevel && edDirty) cards.push({ cont: true });
   list.forEach(l => cards.push({ l }));
   const per = official ? 99 : 15, pages = Math.max(1, Math.ceil(cards.length / per)); selPage = clamp(selPage, 0, pages - 1);
-  const show = cards.slice(selPage * per, selPage * per + per);
+  const show = cards.slice(selPage * per, selPage * per + per), ky = official ? [30, 60, 88] : [26, 52, 72];   // where a card's name, marks and progress bar sit
   show.forEach((c, i) => {
-    const col = official ? i % 4 : i % 5, row = official ? Math.floor(i / 4) : Math.floor(i / 5), x = official ? 20 + col * 233 : 20 + col * 185, y = official ? 236 + row * 116 : 128 + row * 112, w = official ? 217 : 175, h = official ? 104 : 98;
+    const col = official ? i % 4 : i % 5, row = official ? Math.floor(i / 4) : Math.floor(i / 5), x = official ? 20 + col * 233 : 20 + col * 185, y = official ? 168 + row * 132 : 76 + row * 110, w = official ? 221 : 175, h = official ? 120 : 98;
     if (c.nw) { btn('+ New level', x, y, w, h, () => { sfx.click(); openEditor(null); }, { size: 22, fill: 'rgba(255,240,250,.9)' }); return; }
     if (c.cont) { btn('Continue draft', x, y, w, h, () => { sfx.click(); buildLevel(edLevel); state = 'edit'; }, { sub: edLevel.name, size: 21 }); return; }
-    const L = c.l, idx = OFFICIAL.indexOf(L);
+    const L = c.l, idx = OFFICIAL.indexOf(L), b = bestOf(L.id), isNext = L === nx;
     btn('', x, y, w, h, () => {
       sfx.click();
-      if (pickFor === 'edit') openEditor(L); else playLevel(L);
-    }, { r: 22 });
-    txt((idx >= 0 && !L.tutorial ? (OFFICIAL.filter(q => !q.tutorial).indexOf(L) + 1) + '. ' : '') + L.name, x + w / 2, y + 26, L.name.length > (official ? 15 : 11) ? 17 : 20, C.pink, null);
-    if (L.stars) stars(L.stars, x + w / 2 - 70, y + 52, 8); else txt('custom', x + w / 2 - 40, y + 52, 15, C.mauve, null);
-    txt('♪ ' + Math.round((L.bpm || BASE_BPM) * (pickFor === 'play' ? (store.pace || 1) : 1)), x + w - 18, y + 52, 14, C.mauve, null, 'right');
-    const b = bestOf(L.id); ctx.fillStyle = 'rgba(200,160,220,.4)'; rr(x + 20, y + 72, w - 100, 10, 5); ctx.fill();
-    if (b > 0) { ctx.fillStyle = b >= 100 ? C.gold : '#ff7ab8'; rr(x + 20, y + 72, Math.max(10, (w - 100) * b / 100), 10, 5); ctx.fill(); }
-    if (L.tutorial && !bestOf(L.id)) { ctx.fillStyle = C.gold; rr(x + w - 92, y - 9, 86, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt('START HERE', x + w - 49, y + 3, TS.min, '#fff', null); }
+      if (!play) openEditor(L); else playLevel(L);
+    }, { r: 22, on: isNext });
+    ui[ui.length - 1].label = 'level ' + L.name;
+    txt((idx >= 0 && !L.tutorial ? (OFFICIAL.filter(q => !q.tutorial).indexOf(L) + 1) + '. ' : '') + L.name, x + w / 2, y + ky[0], L.name.length > (official ? 15 : 11) ? 17 : 20, C.pink, null);
+    if (L.stars) stars(L.stars, x + 26, y + ky[1], 8); else txt('custom', x + 20, y + ky[1], 15, C.mauve, null, 'left');
+    txt('♪ ' + Math.round((L.bpm || BASE_BPM) * (play ? (store.pace || 1) : 1)), x + w - 20, y + ky[1], 14, C.mauve, null, 'right');
+    ctx.fillStyle = 'rgba(200,160,220,.4)'; rr(x + 20, y + ky[2] - 5, w - 104, 10, 5); ctx.fill();
+    if (b > 0) { ctx.fillStyle = b >= 100 ? C.gold : '#ff7ab8'; rr(x + 20, y + ky[2] - 5, Math.max(10, (w - 104) * b / 100), 10, 5); ctx.fill(); }
+    if (isNext) { const t = L.tutorial ? 'START HERE' : 'NEXT UP', bw = L.tutorial ? 92 : 76; ctx.fillStyle = C.gold; rr(x + w - bw - 8, y - 10, bw, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt(t, x + w - bw / 2 - 8, y + 2, TS.min, '#fff', '#c98a00'); }
     const rt = store.rate[L.id] || 0;   // rhythm rating: up to 3 hearts for timing accuracy
-    for (let i = 0; i < 3; i++) { ctx.fillStyle = i < rt ? C.hot : 'rgba(200,160,220,.5)'; heartPath(x + w - 62 + i * 19, y + 77, 7); ctx.fill(); }
-    if (L.custom && pickFor !== 'edit') {
-      ui.pop(); ui.push({ x, y, w: w - 34, h, fn: () => { sfx.click(); playLevel(L); } });
+    for (let i = 0; i < 3; i++) { ctx.fillStyle = i < rt ? C.hot : 'rgba(200,160,220,.5)'; heartPath(x + w - 62 + i * 19, y + ky[2], 7); ctx.fill(); }
+    if (L.custom && play) {
+      ui.pop(); ui.push({ x, y, w: w - 34, h, label: 'level ' + L.name, fn: () => { sfx.click(); playLevel(L); } });
     }
     if (L.custom) {
       btn('⧉', x + 4, y + 4, 36, 24, () => { sfx.click(); copyText(levelCode(L), 'Level code copied'); }, { size: 14, r: 10 });
@@ -167,22 +216,32 @@ function drawSelect() {
       btn(armed ? 'sure?' : '✕', x + w - 40, y + 4, 36, 24, () => { if (armed) { store.custom = store.custom.filter(q => q.id !== L.id); persist(); delArm = null; } else delArm = L.id; }, { size: armed ? 11 : 14, col: '#e03070', r: 10 });
     }
   });
-  if (!cards.length) txt('No levels yet — make one in the Level Creator!', W / 2, 270, 24, '#fff', C.plum);
-  if (pages > 1) { btn('◀', W / 2 - 80, 478, 50, 36, () => { selPage = Math.max(0, selPage - 1); }, { size: 18, off: selPage === 0 }); btn('▶', W / 2 + 30, 478, 50, 36, () => { selPage = Math.min(pages - 1, selPage + 1); }, { size: 18, off: selPage === pages - 1 }); txt(`${selPage + 1}/${pages}`, W / 2, 496, 16, '#fff', C.plum); }
-  btn('Back', 24, 478, 110, 40, () => { sfx.back(); toTitle(); }, { size: 18 });
+  if (!cards.length) {   // an empty list says what to do about it
+    txt('No levels of your own yet', W / 2, 200, 28, '#fff', C.plum); txt('Build one in the Level Creator, or paste a code a friend sent you.', W / 2, 236, TS.body, '#fff', C.plum);
+    btn('Open the Level Creator', W / 2 - 150, 268, 300, 56, () => { sfx.click(); pickFor = 'edit'; selPage = 0; }, { primary: true, size: 21, r: 22 });
+  }
+  if (pages > 1) { btn('◀', W / 2 - 86, 414, 56, 44, () => { selPage = Math.max(0, selPage - 1); sfx.tap(); }, { size: 18, off: selPage === 0 }); btn('▶', W / 2 + 30, 414, 56, 44, () => { selPage = Math.min(pages - 1, selPage + 1); sfx.tap(); }, { size: 18, off: selPage === pages - 1 }); txt(`${selPage + 1}/${pages}`, W / 2, 437, 16, '#fff', C.plum); }
+  // bottom row: the way out, and how to play (mode and pace apply to whichever level is picked)
+  btn('‹ Back', 20, 478, 110, 44, () => { sfx.back(); toTitle(); }, { size: 19 });
+  if (play) {   // Pace rescales the tempo (and every timing window with it) without changing any layout
+    txt('Mode', 346, 501, TS.small, '#fff', C.plum, 'right');
+    seg(MODES.map(m => [m[0], m[1]]), 356, 478, 88, 44, mode, v => { mode = v; sfx.tap(); });
+    txt('Pace', 678, 501, TS.small, '#fff', C.plum, 'right');
+    seg([['Chill', .85], ['Normal', 1], ['Spicy', 1.12]], 688, 478, 84, 44, [.85, 1, 1.12].find(v => Math.abs((store.pace || 1) - v) < .01), v => { store.pace = v; persist(); sfx.tap(); });
+  }
 }
 /* ================= settings =================
    Volume sliders, comfort options, and the save backup. Sliders are ui entries with a `slider` field; the settings screen routes drags to them. */
 let dragSlider = null, resetArm = 0;
 function sliderTo(mx) { const sl = dragSlider, v = Math.round(clamp((mx - sl.x0) / (sl.x1 - sl.x0), 0, 1) * 20) / 20; if (v !== sl.last) { sl.last = v; sfx.tick(v); } sl.set(v); }   // a tick on every step
 function slider(label, x, y, val, set) {
-  const x0 = x + 160, x1 = x + 400, my = y + 22;
+  const x0 = x + 96, x1 = x + 344, my = y + 22;
   txt(label, x, my, TS.label, C.pink, null, 'left');
   ctx.fillStyle = 'rgba(200,160,220,.45)'; rr(x0, my - 7, x1 - x0, 14, 7); ctx.fill();
   const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, '#ff9ccf'); g.addColorStop(1, '#c86bff');
   ctx.fillStyle = g; rr(x0, my - 7, Math.max(14, (x1 - x0) * val), 14, 7); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x0 + (x1 - x0) * val, my, 15, 0, 7); ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = C.hot; ctx.stroke();
-  txt(Math.round(val * 100) + '%', x1 + 14, my, TS.small, C.mauve, null, 'left');
+  txt(Math.round(val * 100) + '%', x + 400, my, TS.small, C.mauve, null, 'right');
   ui.push({ x: x0 - 16, y, w: x1 - x0 + 32, h: 44, label: 'slider ' + label, slider: { x0, x1, set }, fn() {} });
 }
 function exportSave() { copyText('JDS1.' + btoa(unescape(encodeURIComponent(JSON.stringify(store)))), 'Save code copied — keep it somewhere safe'); }
@@ -203,25 +262,26 @@ function resetProgress() {
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
   ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(-VX, 0, VW, H);
-  txt('Settings', W / 2, 44, 38, C.pink, '#fff');
-  const S = SET(), cw = 420, y0 = 100, step = 58, rm = S.reduceMotion;
-  txt('Sound & comfort', 40, y0 - 6, TS.body, C.plum, '#fff', 'left');
-  slider('Music', 40, y0 + 14, S.music, v => { S.music = v; applyVolumes(); });
-  slider('Effects', 40, y0 + 14 + step, S.sfx, v => { S.sfx = v; applyVolumes(); });
-  const tg2 = (label, i, on, fn) => btn(label + ': ' + (on ? 'on' : 'off'), 40, y0 + 14 + step * (2 + i), cw, 46, () => { fn(); persist(); sfx.toggle(!on); }, { size: 19, on });
-  tg2('Vibration', 0, S.haptics, () => { S.haptics = !S.haptics; if (S.haptics) buzz(20); });
-  btn('Reduce motion: ' + (rm === null ? 'auto' : rm ? 'on' : 'off'), 40, y0 + 14 + step * 3, cw, 46, () => { S.reduceMotion = rm === null ? true : rm ? false : null; persist(); sfx.click(); }, { size: 19, on: rm === true });
-  tg2('Spin in the air', 2, S.tumble, () => { S.tumble = !S.tumble; tumble = S.tumble; });
-  tg2('Jump guides', 3, store.guides !== false, () => { store.guides = store.guides === false; });
-  txt('Your save', 520, y0 - 6, TS.body, C.plum, '#fff', 'left');
-  btn('Copy save code', 520, y0 + 14, 400, 46, () => { sfx.click(); exportSave(); }, { size: 19 });
-  btn('Restore from code', 520, y0 + 14 + step, 400, 46, () => { sfx.click(); importSave(); }, { size: 19 });
-  btn(resetArm > 0 ? 'Tap again to confirm' : 'Reset progress', 520, y0 + 14 + step * 2, 400, 46, resetProgress, { size: 19, col: C.hot, on: resetArm > 0 });
-  txt('Progress and your own levels live in this browser.', 520, y0 + 14 + step * 3 + 8, TS.small, C.mauve, null, 'left');
-  txt('Copy a save code now and then to keep a backup.', 520, y0 + 14 + step * 3 + 32, TS.small, C.mauve, null, 'left');
-  btn('How to play', 520, y0 + 14 + step * 4, 400, 46, () => { sfx.panel(true); showInfo('How to play', HOW_TO); }, { size: 19 });
-  btn('Privacy', 520, y0 + 14 + step * 5, 400, 46, () => { sfx.panel(true); showInfo('Privacy', PRIVACY); }, { size: 19 });
-  btn('‹ Back', 24, 478, 120, 44, () => { sfx.back(); toTitle(); }, { size: 20 });
+  txt('Settings', W / 2, 36, 34, C.pink, '#fff');
+  const S = SET(), rm = S.reduceMotion, lx = 28, rx = 492, pw = 440, top = 70, y0 = top + 44, step = 58, cw = pw - 40;
+  panel(lx, top, pw, 392, 'Sound & feel');
+  slider('Music', lx + 20, y0, S.music, v => { S.music = v; applyVolumes(); });
+  slider('Effects', lx + 20, y0 + 56, S.sfx, v => { S.sfx = v; applyVolumes(); });
+  const row = (label, i, on, fn, word) => settingRow(label, lx + 20, y0 + 114 + step * i, cw, on, () => { fn(); persist(); if (word) sfx.click(); else sfx.toggle(!on); }, word);
+  row('Vibration', 0, S.haptics, () => { S.haptics = !S.haptics; if (S.haptics) buzz(20); });
+  row('Reduce motion', 1, rm === true, () => { S.reduceMotion = rm === null ? true : rm ? false : null; }, rm === null ? 'auto (' + (OS_REDUCE ? 'on' : 'off') + ')' : rm ? 'on' : 'off');
+  row('Spin in the air', 2, S.tumble, () => { S.tumble = !S.tumble; tumble = S.tumble; });
+  row('Jump guides', 3, store.guides !== false, () => { store.guides = store.guides === false; });
+  panel(rx, top, pw, 392, 'Your save');
+  btn('Copy save code', rx + 20, y0, cw, 46, () => { sfx.click(); exportSave(); }, { size: 19 });
+  btn('Restore from code', rx + 20, y0 + step, cw, 46, () => { sfx.click(); importSave(); }, { size: 19 });
+  btn(resetArm > 0 ? 'Tap again to confirm' : 'Reset progress', rx + 20, y0 + step * 2, cw, 46, resetProgress, { size: 19, col: C.hot, on: resetArm > 0 });
+  txt('Progress and your own levels live on this device.', rx + 22, y0 + step * 3 + 4, TS.small, C.mauve, null, 'left');
+  txt('Copy a save code now and then to keep a backup.', rx + 22, y0 + step * 3 + 26, TS.small, C.mauve, null, 'left');
+  txt('Help', rx + 22, y0 + step * 3 + 64, TS.body, C.mauve, null, 'left');
+  btn('How to play', rx + 20, y0 + step * 3 + 86, cw / 2 - 6, 46, () => { sfx.panel(true); showInfo('How to play', HOW_TO); }, { size: 19 });
+  btn('Privacy', rx + 20 + cw / 2 + 6, y0 + step * 3 + 86, cw / 2 - 6, 46, () => { sfx.panel(true); showInfo('Privacy', PRIVACY); }, { size: 19 });
+  btn('‹ Back', 20, 478, 110, 44, () => { sfx.back(); toTitle(); }, { size: 19 });
 }
 const HOW_TO = [
   'Tap anywhere (or press Space) to jump. The jelly runs by itself; you only choose when to hop.',
@@ -229,6 +289,7 @@ const HOW_TO = [
   'In the ship, press and hold to rise and let go to sink. Pads bounce you high, and orbs give one more jump in mid-air.',
   'Dash is the classic run. Zen forgives mistakes. Practice lets you drop checkpoints.',
   'Squish Room and Squish Studio have no way to lose: poke, drag and knead the jelly.',
+  'Pick Dash, Zen or Practice at the bottom of the level list, next to Pace. Chill pace slows a level down while you learn it.',
   'In a run, the ☰ button (top right) leaves the level; tap it twice.',
 ].join('\n\n');
 const PRIVACY = [
@@ -372,7 +433,12 @@ function overlays() {
     txt(`Score ${scoreNow}   •   Timing ${tacc}%`, W / 2, 262, 28, C.pink, '#fff');
     txt(`Perfect ${judged.PERFECT}   Great ${judged.GREAT}   Good ${judged.GOOD}   Ok ${judged.OK}`, W / 2, 298, 20, '#fff', C.plum);
     for (let i = 0; i < 3; i++) { ctx.fillStyle = i < winStars ? C.hot : 'rgba(255,255,255,.55)'; heartPath(W / 2 - 52 + i * 52, 340, 17); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-    if (winT > 1.2) txt(testing ? 'tap to return to the editor' : 'tap to continue', W / 2, 390, 22, '#fff', C.plum);
+    if (winT > 1.2) {   // what next: named choices instead of one hidden "tap anywhere" (a tap elsewhere still goes back, as before)
+      const again = () => { sfx.click(); startLevel(testing ? edLevel : curLevel, mode, testing); }, order = playOrder(), nxt = !testing && OFFICIAL.includes(curLevel) ? order[order.indexOf(curLevel) + 1] : null;
+      const opts = testing ? [['Play again', again, 170], ['Back to the editor', () => { sfx.back(); leaveRun(); }, 250, 1]] : nxt ? [['Levels', () => { sfx.back(); leaveRun(); }, 140], ['Play again', again, 170], ['Next: ' + nxt.name + ' ▸', () => { sfx.click(); playLevel(nxt); }, Math.max(230, 110 + nxt.name.length * 12), 1]] : [['Play again', again, 170], ['Levels', () => { sfx.back(); leaveRun(); }, 200, 1]];
+      let bx = W / 2 - opts.reduce((a, o) => a + o[2] + 14, -14) / 2;
+      for (const [label, fn, w, main] of opts) { btn(label, bx, 384, w, 52, fn, { primary: !!main, size: 21, r: 22 }); bx += w + 14; }
+    }
     ctx.globalAlpha = 1;
   }
   if (toast.life > 0 && roomPanel !== 'goals') {   // (not over the goals card: its first row sits where toasts do)

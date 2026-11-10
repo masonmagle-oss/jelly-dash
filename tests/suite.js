@@ -321,6 +321,29 @@
   });
 
   /* ---------- browser gestures ---------- */
+  test('menus: Play opens the list at the next unbeaten level, and the list picks mode and pace', async () => {
+    await toTitle(); const S = J.getStore(), best = S.best, pace = S.pace; const run = re => J.getUi().find(b => re.test(b.label)).fn();
+    try {
+      S.best = {}; await frames(2); eq(nextUp().name, 'Welcome', 'a new player is pointed at the tutorial');
+      for (const l of J.OFFICIAL.filter(l => l.world === 0)) S.best[l.id] = 100;
+      await frames(2); run(/^Play/); await frames(2); eq(J.getState(), 'select'); eq(currentWorld(), 1, 'the list opens on the world with the next level');
+      ok(J.getUi().some(b => b.label === 'level ' + nextUp().name), 'the next level has a card on screen');
+      run(/^Zen/); eq(J.getMode(), 'zen', 'mode is chosen in the list'); run(/^Practice/); eq(J.getMode(), 'practice');
+      run(/^Chill/); eq(S.pace, .85, 'pace too'); await frames(2); ok(J.getUi().some(b => b.label === 'Chill (on)'), 'the chosen segment is marked');
+      eq(J.auditUi(), [], 'still finger-sized');
+    } finally { S.best = best; S.pace = pace; await toTitle(); }
+  });
+  test('menus: the result screen offers the next level, a replay and the list', async () => {
+    await toTitle(); const first = level('First Hop'), order = playOrder(), after = order[order.indexOf(first) + 1];
+    const show = async () => { J.startLevel(first, 'zen', false); J.setState('win'); winT = 2; await frames(3); };
+    try {
+      await show(); const labels = J.getUi().map(b => b.label); ok(labels.includes('Levels') && labels.includes('Play again') && labels.some(l => l.startsWith('Next: ' + after.name)), 'three choices: ' + labels.join(' | '));
+      J.getUi().find(b => b.label.startsWith('Next: ')).fn(); eq(J.getState(), 'play'); eq(curLevel.name, after.name, 'Next starts the following level'); eq(J.getMode(), 'zen', 'in the same mode');
+      await show(); J.getUi().find(b => b.label === 'Play again').fn(); eq(J.getState(), 'play'); eq(curLevel.name, first.name, 'Play again restarts this one');
+      await show(); J.getUi().find(b => b.label === 'Levels').fn(); eq(J.getState(), 'select', 'Levels goes back to the list');
+      const last = order[order.length - 1]; J.startLevel(last, 'dash', false); J.setState('win'); winT = 2; await frames(3); ok(!J.getUi().some(b => b.label.startsWith('Next: ')), 'no Next after the last level');
+    } finally { await toTitle(); }
+  });
   test('browser gestures are cancelled: context menu, selection, drag, double-click, Safari pinch', () => {
     const c = document.getElementById('c');
     for (const t of ['contextmenu', 'selectstart', 'dragstart', 'dblclick', 'gesturestart', 'gesturechange', 'gestureend']) { const e = new Event(t, { bubbles: true, cancelable: true }); c.dispatchEvent(e); ok(e.defaultPrevented, t + ' should be cancelled'); }
@@ -345,7 +368,7 @@
     const tapAt = async b => { const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
       cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 9, pointerType: 'touch', bubbles: true })); window.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 9, pointerType: 'touch' })); };
     try {
-      const dash = J.getUi().find(b => /^Dash/.test(b.label)); await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'first tap opens the list');
+      const dash = J.getUi().find(b => /^Play/.test(b.label)); await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'first tap opens the list');
       await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'an instant second tap must not start a level');
       await wait(300); const card = J.getUi().find(b => b.w > 160 && b.h > 80); await tapAt(card); await frames(2); eq(J.getState(), 'play', 'a deliberate tap later works');
     } finally { J.setGhostMs(0); await toTitle(); }
