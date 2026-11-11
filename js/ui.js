@@ -23,15 +23,22 @@ function drawTitle() {
   const widths = [...word].map(ch => ctx.measureText(ch).width), total = widths.reduce((a, b) => a + b, 0);
   let x = W / 2 - total / 2;
   [...word].forEach((ch, i) => { txt(ch, x + widths[i] / 2, 78 + Math.sin(tg * 3 + i * .6) * 7, 70, i % 2 ? C.pink : '#c86bff', '#fff'); x += widths[i]; });
-  txt('squishy physics platformer', W / 2, 124, 21, '#fff', C.plum);
-  const items = [['Dash', store.best.o14 ? 'the classic run' : 'new here? try the Welcome level first', () => { pickFor = 'play'; mode = 'dash'; state = 'select'; }], ['Zen', 'no oopsies, just vibes', () => { pickFor = 'play'; mode = 'zen'; state = 'select'; }],
-    ['Practice', 'checkpoints • learn a level at your pace', () => { pickFor = 'play'; mode = 'practice'; state = 'select'; }],
-    ['Squish Room', 'poke, drag & fling the jelly', enterRoom],
-    ['Squish Studio', 'knead shapes, build a song', () => startStudio()], ['Level Creator', 'build, test & share your own', () => { pickFor = 'edit'; state = 'select'; }]];
-  items.forEach((m, i) => btn(m[0], W / 2 - 340 + (i % 2) * 350, 150 + Math.floor(i / 2) * 98, 330, 86, () => { initAudio(); sfx.click(); m[2](); }, { sub: m[1], size: 24, ssize: 14 }));   // two columns of big buttons: finger-sized on a phone
+  txt('squish  •  puff  •  dash', W / 2, 124, 22, '#fff', C.plum);
+  // one big button does the obvious thing: start, or carry on with the next level you have not beaten; everything else is grouped under it
+  const nx = nextLevel(), fresh = !OFFICIAL.some(l => bestOf(l.id) > 0), beaten = OFFICIAL.filter(l => bestOf(l.id) >= 100).length;
+  btn(fresh ? 'Play' : 'Continue', W / 2 - 230, 146, 460, 96, () => { initAudio(); sfx.click(); playNext(); }, { sub: fresh ? 'start with the Welcome level' : 'next up: ' + nx.name, size: 38, ssize: 17, fill: 'rgba(255,255,255,.98)', on: true, r: 26 });
+  const row = (y, items) => items.forEach((m, i) => btn(m[0], W / 2 - 330 + i * 230, y, 200, 74, () => { initAudio(); sfx.click(); m[2](); }, { sub: m[1], size: 21, ssize: 13 }));
+  row(256, [['Levels', 'pick any • daily level', () => { pickFor = 'play'; mode = 'dash'; state = 'select'; }], ['Zen', 'no oopsies, just vibes', () => { pickFor = 'play'; mode = 'zen'; state = 'select'; }],
+    ['Practice', 'learn with checkpoints', () => { pickFor = 'play'; mode = 'practice'; state = 'select'; }]]);
+  txt('SQUISH AROUND', W / 2, 352, 14, '#fff', C.plum);
+  row(364, [['Squish Room', 'poke, drag & fling', enterRoom], ['Squish Studio', 'knead shapes, make music', () => startStudio()], ['Level Creator', 'build & share yours', () => { pickFor = 'edit'; state = 'select'; }]]);
+  txt(beaten + ' / ' + OFFICIAL.length + ' levels beaten', W / 2, 470, 18, '#fff', C.plum);
   btn('⚙ Settings', W - 148, 14, 132, 40, () => { sfx.click(); state = 'settings'; }, { size: 17, r: 16 });
-  txt(isTouchUi() ? 'tap to choose  •  headphones recommended' : '1-6 to choose  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
+  txt(isTouchUi() ? 'tap to choose  •  headphones recommended' : 'Enter to play  •  1-6 shortcuts  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
 }
+// the next official level the player has not beaten (the first level if they are all done, so Play always does something)
+function nextLevel() { return OFFICIAL.find(l => bestOf(l.id) < 100) || OFFICIAL[1] || OFFICIAL[0]; }
+function playNext() { const L = nextLevel(); pickFor = 'play'; mode = 'dash'; selWorld = L.world; selTab = 0; playLevel(L); }
 let dailyL = null;
 function selList() { return selTab === 0 ? OFFICIAL : store.custom; }
 
@@ -156,6 +163,16 @@ function drawSelect() {
     const b = bestOf(L.id); ctx.fillStyle = 'rgba(200,160,220,.4)'; rr(x + 20, y + 72, w - 100, 10, 5); ctx.fill();
     if (b > 0) { ctx.fillStyle = b >= 100 ? C.gold : '#ff7ab8'; rr(x + 20, y + 72, Math.max(10, (w - 100) * b / 100), 10, 5); ctx.fill(); }
     if (L.tutorial && !bestOf(L.id)) { ctx.fillStyle = C.gold; rr(x + w - 92, y - 9, 86, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt('START HERE', x + w - 49, y + 3, TS.min, '#fff', null); }
+    else if (official && pickFor === 'play' && L === nextLevel()) {   // the level Continue would start: a pulsing outline and a tag
+      ctx.save(); ctx.globalAlpha = .55 + .35 * Math.sin(tg * 5); ctx.lineWidth = 4; ctx.strokeStyle = C.gold; rr(x - 3, y - 3, w + 6, h + 6, 25); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = C.gold; rr(x + w - 82, y - 9, 76, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt('NEXT UP', x + w - 44, y + 3, TS.min, '#fff', null);
+    }
+    if (official) {   // power badges: which new move a level asks for
+      let bx = x + 10; for (const [name, col] of [['SQUISH', '#c86bff'], ['PUFF', '#4aa8ff']]) {
+        if (name === 'SQUISH' ? !/\bf[ls]\d/.test(L.script || '') : !L.puff) continue;
+        const bw = name.length * 8 + 18; ctx.fillStyle = col; rr(bx, y - 9, bw, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt(name, bx + bw / 2, y + 3, TS.min, '#fff', null); bx += bw + 6;
+      }
+    }
     const rt = store.rate[L.id] || 0;   // rhythm rating: up to 3 hearts for timing accuracy
     for (let i = 0; i < 3; i++) { ctx.fillStyle = i < rt ? C.hot : 'rgba(200,160,220,.5)'; heartPath(x + w - 62 + i * 19, y + 77, 7); ctx.fill(); }
     if (L.custom && pickFor !== 'edit') {

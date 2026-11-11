@@ -60,7 +60,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM' && state !== 'edit') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; return; }
   if (state === 'title') {
     initAudio();
-    if (e.code === 'Digit1' || e.code === 'Enter') { pickFor = 'play'; mode = 'dash'; state = 'select'; } else if (e.code === 'Digit2') { pickFor = 'play'; mode = 'zen'; state = 'select'; }
+    if (e.code === 'Enter' || e.code === 'Space') playNext();   // the big Play / Continue button
+    else if (e.code === 'Digit1') { pickFor = 'play'; mode = 'dash'; state = 'select'; } else if (e.code === 'Digit2') { pickFor = 'play'; mode = 'zen'; state = 'select'; }
     else if (e.code === 'Digit3') { pickFor = 'play'; mode = 'practice'; state = 'select'; }
     else if (e.code === 'Digit4') enterRoom(); else if (e.code === 'Digit5') startStudio(); else if (e.code === 'Digit6') { pickFor = 'edit'; state = 'select'; }
     return;
