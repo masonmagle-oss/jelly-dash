@@ -13,7 +13,7 @@
   /* ---------- data ---------- */
   test('official levels: unique ids, sane fields, tutorial first', () => {
     const ids = new Set(); for (const l of J.OFFICIAL) { ok(!ids.has(l.id), 'duplicate id ' + l.id); ids.add(l.id); ok(l.name && l.objs.length && l.len > 40, 'bad level ' + l.name); ok(l.stars >= 1 && l.stars <= 5, 'stars ' + l.name); ok(l.coy >= .03 && l.coy <= .12, 'coyote ' + l.name); }
-    eq(J.OFFICIAL.length, 19, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
+    eq(J.OFFICIAL.length, 21, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
     for (const id of ['o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11']) ok(ids.has(id), 'saved id kept: ' + id);
   });
   test('level share codes round-trip every official level', () => {
@@ -194,6 +194,22 @@
     // levels that are not built for it do not float, even with the key held: no accidental cheat
     const fh = J.OFFICIAL.find(l => l.name === 'First Hop'); await J.startLevel(fh, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.flat = true; J.press(); let flew = 0; for (let i = 0; i < 80; i++) { J.update(J.STEP); if (J.P.puffing) flew++; } J.inp.flat = false;
     eq(flew, 0, 'no float in a level without the puff'); ok(!hasPuff && !hasSqueeze, 'and no Squish button there');
+    J.resetRun();
+  });
+  test('bounce power: a tap just before landing springs up higher, only in levels built for it, and only in the air', async () => {
+    const bb = J.OFFICIAL.find(l => l.name === 'Boing Bay'), fh = J.OFFICIAL.find(l => l.name === 'First Hop'); ok(bb && bb.bounce && J.OFFICIAL.find(l => l.name === 'Bounce House').bounce, 'the bounce levels exist');
+    const bounce = async (lvl, mode) => {   // hop once, then tap: 'early' = just before touching down, 'late' = after landing
+      await J.startLevel(lvl, 'dash', false); J.resetRun(); J.inp.buf = 0; J.inp.held = false; J.inp.flat = false; J.press(); J.inp.held = false; J.update(J.STEP); const v1 = -J.P.vy; let pressed = false, v2 = 0, apex = 0, startY = J.P.y + J.P.h;
+      for (let i = 0; i < 3000 && J.state === 'play'; i++) {
+        const L = landingIn(); if (!pressed && mode === 'early' && !J.P.grounded && J.P.vy > 0 && L && L.t < .05) { J.press(); J.inp.held = false; pressed = true; }
+        if (!pressed && mode === 'late' && J.P.grounded && i > 20) { J.press(); J.inp.held = false; pressed = true; }
+        J.update(J.STEP); if (pressed && !v2 && J.P.vy < -200) { v2 = -J.P.vy; startY = J.P.y + J.P.h; } if (v2) { apex = Math.max(apex, startY - (J.P.y + J.P.h)); if (J.P.vy > 0) break; }
+      }
+      return { v1, v2, apex, g: G };   // (g: this level's gravity; the next run switches tempo)
+    };
+    const e = await bounce(bb, 'early'), l = await bounce(bb, 'late'), n = await bounce(fh, 'early');
+    ok(e.v2 / e.v1 > BOUNCE_K - .03 && e.v2 / e.v1 < BOUNCE_K + .03, 'an early tap springs up ' + (e.v2 / e.v1).toFixed(2) + 'x'); ok(e.apex > 1.6 * (e.v1 * e.v1 / (2 * e.g)) * .95, 'about 1.7x as high (' + Math.round(e.apex) + ' px)');
+    ok(Math.abs(l.v2 / l.v1 - 1) < .03, 'a tap after landing is an ordinary hop'); ok(Math.abs(n.v2 / n.v1 - 1) < .03, 'no bounce in a level without it');
     J.resetRun();
   });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
@@ -431,6 +447,8 @@
     for (const c of clusters) {
       if (c.ship) continue;
       if (L.puff && c.kind === 'gap' && c.n >= 6) { add((c.n >= 8 ? 130 : c.n === 7 ? 170 : 220) / K); continue; }   // a wide gap in a puff level: hop and float across (the narrower the time to take off, the heavier)
+      if (L.bounce && c.kind === 'block' && c.h >= 3) { add(260 / K); continue; }   // a tall block in a bounce level: land, tap just before touching down, spring over it
+      if (L.bounce && c.kind === 'gap' && c.n >= 6) { add(200 / K); continue; }
       if ((c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45));
     }
     J.pads.forEach(() => add(300 / K)); for (const o of L.objs) if (o.t === 'orb') add(180 / K);
