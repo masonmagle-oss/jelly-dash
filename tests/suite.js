@@ -253,6 +253,24 @@
     J.edApply(520, 330, true); ok(J.getEd().objs.length === n0 + 1, 'placed'); J.edUndo(); eq(J.getEd().objs.length, n0, 'undone'); J.edRedo(); eq(J.getEd().objs.length, n0 + 1, 'redone');
     J.edPush(); J.getEd().bpm = 150; J.edUndo(); ok(J.getEd().bpm !== 150, 'tempo undone');
   });
+  test('editor: gummy gates, Puff and Bounce can be built, undone, saved, shared and imported', () => {
+    ok(J.TOOLS ? true : TOOLS.some(t => t[0] === 'gate'), 'the Gate tool exists'); eq(TOOLS.length, 11, 'eleven tools');
+    J.openEditor(null); const px = c => c * 48 + 20, paint = { tool: 'gate', last: null, val: true };
+    J.edApply(px(12), 200, true, paint); J.edApply(px(13), 200, false, paint); J.edApply(px(4), 200, false, paint);   // two gates, and a third too close to the start, which is refused
+    eq(J.getEd().objs.filter(o => o.t === 'gate').map(o => o.x).sort((a, b) => a - b).join(), '12,13', 'a dragged run of gates, none in the safe start');
+    buildLevel(J.getEd()); ok(hasGate && solids.filter(s => s.gate).length === 1, 'the run is one gate in the live level'); ok(J.getEd().objs.every(o => o.t !== 'gate' || o.y === undefined), 'gates carry no height');
+    J.edApply(px(12), 200, true, { tool: 'gate', last: null, val: true }); ok(!J.getEd().objs.some(o => o.t === 'gate' && o.x === 12), 'the Gate tool on a gate removes it'); J.edUndo(); ok(J.getEd().objs.some(o => o.t === 'gate' && o.x === 12), 'Undo brings it back');
+    J.edApply(px(13), 200, true, { tool: 'erase', last: null, val: true }); ok(!J.getEd().objs.some(o => o.t === 'gate' && o.x === 13), 'the Eraser removes a gate too');
+    // the power switches: saved with the level, undone, and carried by both kinds of share code
+    J.edUndo(); const E = J.getEd(); J.edPush(); E.puff = true; J.edPush(); E.bounce = true; buildLevel(E); ok(hasPuff && hasBounce, 'the switches reach the live level');
+    const back = parseLevelCode(levelCode(E)); ok(back && back.puff === true && back.bounce === true && back.objs.filter(o => o.t === 'gate').length === 2, 'the short share code carries gates and both powers');
+    const js = sanitize(JSON.parse(JSON.stringify({ name: E.name, len: E.len, pal: E.pal, bpm: E.bpm, style: E.style, auto: E.auto, puff: E.puff, bounce: E.bounce, objs: E.objs }))); ok(js.puff === true && js.bounce === true && js.objs.filter(o => o.t === 'gate').length === 2, 'the JSON code too');
+    ok(levelCode(E) !== levelCode(Object.assign({}, E, { puff: false })), 'a level that changes a switch needs its check again (its code changed)');
+    J.edUndo(); eq(!!J.getEd().bounce, false, 'Undo flips a switch back'); J.edUndo(); eq(!!J.getEd().puff, false, 'and the other');
+    // a power level opened in the editor keeps its powers and still proves beatable
+    for (const [n, k] of [['Puddle Hop', 'gate'], ['Puff Pillow', 'puff'], ['Boing Bay', 'bounce']]) { J.openEditor(level(n)); const R = J.getEd(); ok(k === 'gate' ? R.objs.some(o => o.t === 'gate') : R[k] === true, n + ' keeps its ' + k + ' in the editor'); const r = J.solveSync(R, 30000); ok(r.ok, n + ' remix still proves beatable'); }
+    J.setState('title');
+  });
   test('editor check: the screen stays "solving" between steps (long levels)', () => {
     J.openEditor(level('Slime Queen')); const g = J.solveStart(); ok(g.next && J.getState() === 'solving'); g.next(); ok(J.getState() === 'solving', 'state restored after the first yield'); g.return(); J.setState('title');
   }, { slow: true });
