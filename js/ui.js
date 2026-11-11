@@ -45,7 +45,7 @@ function selList() { return selTab === 0 ? OFFICIAL : store.custom; }
 /* ---------- sharing and the daily level ---------- */
 // a level becomes a short text code anyone can paste in; codes from other people are untrusted, so every field is checked and clamped on the way in
 function levelCode(L) {
-  const o = { n: String(L.name || 'Level').slice(0, 24), p: L.pal, l: L.len, b: L.bpm, y: L.coy || DEF_COY, s: L.style, a: L.auto ? 1 : 0, o: L.objs.map(q => [OBJ_TYPES.indexOf(q.t), q.x, q.y || 0, q.to === 'ship' ? 1 : 0]) };
+  const o = { n: String(L.name || 'Level').slice(0, 24), p: L.pal, l: L.len, b: L.bpm, y: L.coy || DEF_COY, s: L.style, a: L.auto ? 1 : 0, f: (L.puff ? 1 : 0) | (L.bounce ? 2 : 0), o: L.objs.map(q => [OBJ_TYPES.indexOf(q.t), q.x, q.y || 0, q.to === 'ship' ? 1 : 0]) };
   return 'JD1.' + btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 }
 function parseLevelCode(s) {
@@ -58,11 +58,11 @@ function parseLevelCode(s) {
     for (const q of o.o) {
       if (!Array.isArray(q)) return null;
       const t = OBJ_TYPES[q[0]]; if (!t) return null;
-      const ob = { t, x: fin(q[1], 0, 2000, 0) }; if (t !== 'gap' && t !== 'portal') ob.y = Math.round(fin(q[2], 0, 6, 0)); if (t === 'heart') ob.y = fin(q[2], 0, 6, 0); if (t === 'portal') ob.to = q[3] ? 'ship' : 'cube';
+      const ob = { t, x: fin(q[1], 0, 2000, 0) }; if (t !== 'gap' && t !== 'portal' && t !== 'gate') ob.y = Math.round(fin(q[2], 0, 6, 0)); if (t === 'heart') ob.y = fin(q[2], 0, 6, 0); if (t === 'portal') ob.to = q[3] ? 'ship' : 'cube';
       objs.push(ob);
     }
     const pal = Array.isArray(o.p) ? o.p.slice(0, 4).map(v => Math.round(fin(v, 0, TH.length - 1, 0))) : [0, 1, 2];
-    return { id: 'c' + Date.now() + Math.floor(Math.random() * 1000), name: cleanName(o.n, 'Shared level'), stars: 0, pal: pal.length ? pal : [0, 1, 2], len: fin(o.l, 40, 2100, 200), objs, coy: fin(o.y, .03, .12, DEF_COY), bpm: fin(o.b, 60, 180, BASE_BPM), style: Math.round(fin(o.s, 0, SONG_N - 1, 0)), auto: !!o.a, custom: true };
+    return { id: 'c' + Date.now() + Math.floor(Math.random() * 1000), name: cleanName(o.n, 'Shared level'), stars: 0, pal: pal.length ? pal : [0, 1, 2], len: fin(o.l, 40, 2100, 200), objs, coy: fin(o.y, .03, .12, DEF_COY), bpm: fin(o.b, 60, 180, BASE_BPM), style: Math.round(fin(o.s, 0, SONG_N - 1, 0)), auto: !!o.a, puff: !!(o.f & 1), bounce: !!(o.f & 2), custom: true };
   } catch (e) { return null; }
 }
 function copyText(t, okMsg) {
@@ -283,7 +283,7 @@ function drawEditor() {
   const col = Math.floor((mouse.x + sc) / T), row = 6 - Math.floor((mouse.y - CEIL) / T);
   if (mouse.y > CEIL && mouse.y < GY + 20 && mouse.x > 0 && col >= 0 && col < edLevel.len && !ui.some(b => mouse.x > b.x && mouse.x < b.x + b.w && mouse.y > b.y && mouse.y < b.y + b.h)) {
     ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.strokeStyle = C.hot; ctx.lineWidth = 2;
-    if (['gap', 'ship', 'cube'].includes(edTool)) { rr(col * T - sc, CEIL, T, GY - CEIL + 14, 6); } else if (row >= 0 && row <= 6) rr(col * T - sc, CEIL + (6 - row) * T, T, T, 8); else ctx.beginPath();
+    if (COLUMN_TOOLS.includes(edTool)) { rr(col * T - sc, CEIL, T, GY - CEIL + 14, 6); } else if (row >= 0 && row <= 6) rr(col * T - sc, CEIL + (6 - row) * T, T, T, 8); else ctx.beginPath();
     ctx.fill(); ctx.stroke();
   }
   // top strip
@@ -297,7 +297,8 @@ function drawEditor() {
   ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-VX, 430, VW, 110);
   // two big rows (tools, main actions) and a "More" card for everything else, so every button is finger-sized
   const live = ui; if (edMore) ui = [];
-  TOOLS.forEach((t, i) => btn((isTouchUi() ? '' : ((i + 1) % 10) + ' ') + t[1], 6 + i * 95, 430, 91, 44, () => { edTool = t[0]; sfx.click(); }, { size: 14, r: 15, on: edTool === t[0], col: t[0] === 'ship' ? C.hot : t[0] === 'cube' ? '#1fa88c' : C.pink }));
+  { const tw = Math.floor((W - 12) / TOOLS.length);   // the tools share the row evenly, however many there are
+    TOOLS.forEach((t, i) => btn((isTouchUi() || i > 9 ? '' : ((i + 1) % 10) + ' ') + t[1], 6 + i * tw, 430, tw - 4, 44, () => { edTool = t[0]; sfx.click(); }, { size: 13, r: 15, on: edTool === t[0], col: t[0] === 'ship' ? C.hot : t[0] === 'cube' ? '#1fa88c' : t[0] === 'gate' ? '#a04ad8' : C.pink })); }
   const main = [['↶ Undo', edUndo], ['↷ Redo', edRedo], ['Test', () => { saveTemp(); startLevel(edLevel, 'dash', true); }], ['Check', () => { solver = solveGen_start(); }], ['Save', saveEd], ['More ▸', () => { edMore = true; sfx.panel(true); }]];
   main.forEach((a, i) => btn(a[0], 6 + i * 159, 482, 153, 50, () => { if (i > 1) sfx.click(); a[1](); }, { size: 19, r: 17, off: (i === 0 && !edHist.length) || (i === 1 && !edFuture.length) }));
   ui = live;
@@ -317,8 +318,10 @@ function drawEditorMore() {
     ['Name', edName], ['Theme', () => { edPush(); const i = PALS.findIndex(p => p.join() === edLevel.pal.join()); edLevel.pal = PALS[(i + 1) % PALS.length].slice(); edDirty = true; }], ['Share', edShare], ['Import', edImport],
     ['New level', () => { edMore = false; openEditor(null); }], ['Length −', () => lenSet(-5)], ['Length +', () => lenSet(5)], ['Leave editor', () => { edMore = false; toTitle(); }],
     ['BPM −', () => bpmSet(-2)], [Math.round(edLevel.bpm || 110) + ' BPM', () => {}], ['BPM +', () => bpmSet(2)], ['♪ ' + STYLES[edLevel.style | 0].name, () => { edPush(); edLevel.style = nextStyle(edLevel.style); edDirty = true; if (edPreview) songStart(edLevel, songT); }],
-    [edPreview ? '■ Stop music' : '▶ Play music', () => { initAudio(); edPreview = !edPreview; if (edPreview) songStart(edLevel, 0); else songStop(); }], [edLevel.auto === false ? 'Tap each hop' : 'Hold to hop', () => { edPush(); edLevel.auto = edLevel.auto === false; edDirty = true; }], [edLevel.len + ' tiles', () => {}], ['Done', close]];
-  items.forEach((it, i) => btn(it[0], px + 24 + (i % 4) * 182, py + 60 + Math.floor(i / 4) * 62, 170, 50, () => { if (it[0] !== 'Done') sfx.click(); it[1](); }, { size: 17, r: 16, on: (it[0] === 'Hold to hop' || it[0] === 'Tap each hop') ? edLevel.auto === false : (it[0] === '■ Stop music') }));
+    [edPreview ? '■ Stop music' : '▶ Play music', () => { initAudio(); edPreview = !edPreview; if (edPreview) songStart(edLevel, 0); else songStop(); }], [edLevel.auto === false ? 'Tap each hop' : 'Hold to hop', () => { edPush(); edLevel.auto = edLevel.auto === false; edDirty = true; }], // the powers a level allows (gummy gates always work; they need the Gate tool): Puff = hold Squish in the air to float, Bounce = tap just before landing to spring higher
+    ['Puff: ' + (edLevel.puff ? 'on' : 'off'), () => { edPush(); edLevel.puff = !edLevel.puff; edRebuild(); }, !!edLevel.puff], ['Bounce: ' + (edLevel.bounce ? 'on' : 'off'), () => { edPush(); edLevel.bounce = !edLevel.bounce; edRebuild(); }, !!edLevel.bounce],
+    [edLevel.len + ' tiles', () => {}], null, null, ['Done', close]];
+  items.forEach((it, i) => it && btn(it[0], px + 24 + (i % 4) * 182, py + 60 + Math.floor(i / 4) * 62, 170, 50, () => { if (it[0] !== 'Done') sfx.click(); it[1](); }, { size: 17, r: 16, on: it[2] !== undefined ? it[2] : (it[0] === 'Hold to hop' || it[0] === 'Tap each hop') ? edLevel.auto === false : (it[0] === '■ Stop music') }));
 }
 function saveTemp() { /* keep working copy as the draft; nothing to do besides rebuild */ buildLevel(edLevel); }
 function solveGen_start() { buildLevel(edLevel); state = 'solving'; solverPct = 0; return checkGen(); }
