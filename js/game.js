@@ -161,6 +161,7 @@ function winJingle() {
   if (!(winStars === 3 && tuneFanfare(c))) [0, 2, 4, 5, 7, 9].forEach((d, i) => voice(mf(degMidi(c, d)), 1.3, .06, i * .12, 'sfx'));
   for (let i = 0; i < winStars; i++) setTimeout(() => sfx.star(i), 900 + i * 220);
 }
+const REWARD = { first: 30, rating: 10, all: 15 };   // hearts for the room: a level's first clear, each rating heart gained (up to 3), and taking every heart in it
 // what the results card shows about this win: first clear, personal bests (against what was saved before this run), and what it unlocked
 let winInfo = { first: false, bestScore: false, bestStars: false, saved: false, unlocked: [], prevScore: 0 };
 function win() {
@@ -168,7 +169,7 @@ function win() {
   state = 'win'; winT = 0; setHum(0); humOn = 0; songStop(); ambStop();
   const acc = judgeN ? judgeBase / (100 * judgeN) : 1; winStars = acc >= .8 ? 3 : acc >= .6 ? 2 : 1;   // rhythm rating from timing accuracy
   { const id = curLevel.id, scored = !testing && mode === 'dash' && (store.pace || 1) >= 1, ps = store.score[id] || 0;
-    winInfo = { first: !testing && mode === 'dash' && (store.best[id] || 0) < 100, bestScore: scored && ps > 0 && scoreNow > ps, bestStars: scored && winStars > (store.rate[id] || 0) && (store.rate[id] || 0) > 0, saved: scored, unlocked: [], prevScore: ps, earned: 0 }; }
+    winInfo = { first: !testing && mode === 'dash' && (store.best[id] || 0) < 100, bestScore: scored && ps > 0 && scoreNow > ps, bestStars: scored && winStars > (store.rate[id] || 0) && (store.rate[id] || 0) > 0, saved: scored, unlocked: [], prevScore: ps, earned: 0, parts: [], prevRate: store.rate[id] || 0 }; }
   winJingle();
   if (!testing && mode === 'dash') {
     const before = doneCount();
@@ -176,9 +177,12 @@ function win() {
     if ((store.pace || 1) >= 1) {   // scores and hearts are for Normal pace and up; Chill is for learning a level
       if (scoreNow > (store.score[curLevel.id] || 0)) store.score[curLevel.id] = scoreNow;
       if (winStars > (store.rate[curLevel.id] || 0)) store.rate[curLevel.id] = winStars;
-      if (OFFICIAL.includes(curLevel)) {   // hearts for the cozy room: only ones not taken before in this level (replays cannot be farmed), plus 10 for a first clear; levels from the editor pay nothing
-        const id = curLevel.id, prev = store.hb[id] || 0, gain = Math.max(0, got - prev) + (winInfo.first ? 10 : 0);
-        store.hb[id] = Math.max(prev, got); store.wallet += gain; winInfo.earned = gain;
+      if (OFFICIAL.includes(curLevel)) {   // hearts for the cozy room, a flat reward per level so a bigger level pays no more than a small one (see REWARD): once for the first clear, once for each rating heart gained, once for taking every heart; replays pay only for improvements, and levels from the editor pay nothing
+        const id = curLevel.id, prevH = store.hb[id] || 0, parts = []; let gain = 0;
+        if (winInfo.first) { gain += REWARD.first; parts.push('first clear ' + REWARD.first); }
+        const rg = Math.max(0, winStars - winInfo.prevRate) * REWARD.rating; if (rg) { gain += rg; parts.push('rating ' + rg); }
+        if (hearts.length && got >= hearts.length && prevH < hearts.length) { gain += REWARD.all; parts.push('every heart ' + REWARD.all); }
+        store.hb[id] = Math.max(prevH, got); store.wallet += gain; winInfo.earned = gain; winInfo.parts = parts;
       }
     }
     persist();

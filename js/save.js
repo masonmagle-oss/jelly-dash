@@ -3,7 +3,7 @@
    Modules are classic scripts that share one global scope (so they can be loaded in order from index.html, in the order listed there). */
 
 /* ================= persistence ================= */
-const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 5;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
+const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 6;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const num = (v, d) => Number.isFinite(+v) && v !== null && v !== '' ? +v : d;
 const DEFAULT_SET = { music: .8, sfx: .9, haptics: true, reduceMotion: null, tumble: true };   // reduceMotion: null = follow the device's setting
@@ -18,8 +18,16 @@ function normalizeStore(raw) {
   // the cozy room: the heart wallet, the most hearts taken in each level (so replays pay only for new ones), and the decor bought and placed (room.js DECOR)
   const idOf = v => typeof v === 'string' && /^[a-z0-9]{1,16}$/.test(v), dr = isObj(r.decor) ? r.decor : {};
   st.wallet = Math.min(1e6, cnt(r.wallet)); st.hb = {}; if (isObj(r.hb)) for (const k of Object.keys(r.hb).slice(0, 400)) st.hb[k] = Math.min(9999, cnt(r.hb[k]));
-  st.decor = { owned: {}, placed: {} }; if (isObj(dr.owned)) for (const k of Object.keys(dr.owned).slice(0, 80)) if (idOf(k) && dr.owned[k] === true) st.decor.owned[k] = true;
+  st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; if (isObj(dr.owned)) for (const k of Object.keys(dr.owned).slice(0, 80)) if (idOf(k) && dr.owned[k] === true) st.decor.owned[k] = true;
   if (isObj(dr.placed)) for (const k of Object.keys(dr.placed).slice(0, 20)) if (idOf(k) && idOf(dr.placed[k]) && st.decor.owned[dr.placed[k]]) st.decor.placed[k] = dr.placed[k];   // only things you own can be placed
+  for (const k of Object.keys(st.decor.owned)) {   // upgrades and dyes only exist for owned things: tier 0..2 (Basic, Deluxe, Golden), dye 0..5 (the current one) and a bit mask of the dyes bought (bit 0, the original colour, is always there)
+    st.decor.tier[k] = clamp(cnt(isObj(dr.tier) ? dr.tier[k] : 0), 0, 2); st.decor.dyes[k] = (cnt(isObj(dr.dyes) ? dr.dyes[k] : 0) & 63) | 1; const d = cnt(isObj(dr.dye) ? dr.dye[k] : 0);
+    st.decor.dye[k] = d <= 5 && (st.decor.dyes[k] >> d & 1) ? d : 0;
+  }
+  // the pet: null until adopted; love (food eaten) sets how grown up it is; the gift is a once-a-day heart find
+  const pt = isObj(r.pet) ? r.pet : null;
+  st.pet = pt && ['bun', 'kit', 'bear'].includes(pt.kind) ? { kind: pt.kind, name: typeof pt.name === 'string' && pt.name.length ? pt.name.replace(/[<>&"`]/g, '').slice(0, 12) : 'Mochi', love: Math.min(1e6, cnt(pt.love)), dyes: (cnt(pt.dyes) & 63) | 1, day: txtOf(pt.day) } : null;
+  if (st.pet) { const d = cnt(pt.dye); st.pet.dye = d <= 5 && (st.pet.dyes >> d & 1) ? d : 0; }
   st.pace = num(st.pace, 1) > 0 ? num(st.pace, 1) : 1; st.haz = Math.max(0, Math.floor(num(st.haz, 0))); st.skin = Math.max(0, Math.floor(num(st.skin, 0)));
   const sv = isObj(r.set) ? r.set : {}; st.set = Object.assign({}, DEFAULT_SET, sv);
   st.set.music = clamp(num(sv.music, DEFAULT_SET.music), 0, 1); st.set.sfx = clamp(num(sv.sfx, DEFAULT_SET.sfx), 0, 1);

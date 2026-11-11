@@ -216,7 +216,7 @@ function importSave() {
 }
 function resetProgress() {
   if (resetArm <= 0) { resetArm = 3; say('Tap again to reset your progress (levels you made are kept)', 3); return; }
-  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; store.wallet = 0; store.hb = {}; store.decor = { owned: {}, placed: {} }; persist(); say('Progress reset', 2.5);
+  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; store.wallet = 0; store.hb = {}; store.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; store.pet = null; persist(); say('Progress reset', 2.5);
 }
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
@@ -431,7 +431,7 @@ function overlays() {
     });
     { const gr = [['Perfect', judged.PERFECT, 'PERFECT'], ['Great', judged.GREAT, 'GREAT'], ['Good', judged.GOOD, 'GOOD'], ['Ok', judged.OK, 'OK']];   // timing breakdown, in the colours the jump judge uses in the run
       gr.forEach(([nm, n, k], i) => { const x = cx - 220 + i * 111; ctx.fillStyle = GRADES[k][1]; ctx.beginPath(); ctx.arc(x + 8, cy0 + 314, 7, 0, 7); ctx.fill(); txt(nm + ' ' + n, x + 20, cy0 + 315, 15, C.plum, null, 'left'); }); }
-    if (winInfo.earned > 0) { const a = ease((winT - 1.1) / .4); ctx.globalAlpha *= a; ctx.fillStyle = C.hot; heartPath(cx - 118, cy0 + 337, 9); ctx.fill(); txt('+' + winInfo.earned + ' hearts for your room' + (winInfo.first ? ' (10 for a first clear)' : ''), cx - 100, cy0 + 338, 15, C.hot, null, 'left'); ctx.globalAlpha = clamp(winT * 2, 0, 1); }
+    if (winInfo.earned > 0) { const a = ease((winT - 1.1) / .4); ctx.globalAlpha *= a; txt('♥ +' + winInfo.earned + ' for your room  (' + winInfo.parts.join(', ') + ')', cx, cy0 + 338, 14, C.hot, null); ctx.globalAlpha = clamp(winT * 2, 0, 1); }
     else if (!winInfo.saved && mode === 'dash' && !testing) txt('Chill pace: score and hearts are not saved', cx, cy0 + 338, 13, C.mauve, null);
     ctx.restore();
     if (winT > 1.2) { ctx.globalAlpha = .6 + .4 * Math.sin(tg * 4); txt(testing ? 'tap to return to the editor' : 'tap to continue', cx, cy0 + ch + 24, 22, '#fff', C.plum); }
@@ -510,7 +510,9 @@ function drawRoom() {
   ctx.fillStyle = fg; rr(RM.l - 14, RM.b, RM.r - RM.l + 28, 88, 20); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.fillRect(RM.l - 8, RM.b, RM.r - RM.l + 16, 7);
   if (studio && flow > .05) { ctx.fillStyle = 'rgba(255,190,235,' + (.16 * BP * flow).toFixed(3) + ')'; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t); }   // the room pulses with the beat as you build the song
-  if (!studio) drawDecor();
+  if (!studio) { drawDecor();
+    if (store.pet) { drawPet(store.pet, 330, RM.b - 3, .95);   // the pet sits by the rug; a heart floats over it while it has a gift for you
+      if (store.pet.day !== dayKey()) { const by = RM.b - 118 + Math.sin(tg * 3) * 5; ctx.fillStyle = C.hot; heartPath(330, by, 11); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); } } }
   drawParts(0);
   const pulling = room.grabs.some(g => !g.pin);
   drawSoft(room, 0, { ground: RM.b, open: pulling || room.inds.length > 0, squint: pulling && roomElong > .35 });
@@ -537,10 +539,10 @@ function floorBar() {
   const y = 464, h = 38, gap = 6, ctrl = { size: 14 }, clip = { x0: 0, y0: RM.b + 3, x1: W, y1: H };   // clip: touch growth may not climb into the play area
   const left = [['‹ Back', 78, () => { sfx.back(); toTitle(); }, ctrl]];
   if (studio) left.push(...studioControls());
-  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 80, () => setPreset(m), { size: 14, on: roomPreset === m }]));
-  const right = [['Skins', studio ? 84 : 76, () => { roomPanel = 'skins'; sfx.panel(true); }, ctrl]];
-  if (!studio) right.push(['Hazards', 84, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl], ['Decor', 78, () => { roomPanel = 'decor'; sfx.panel(true); }, ctrl]);
-  right.push(['Hop', 64, () => { initAudio(); roomHop(); }, ctrl], ['Reset', studio ? 76 : 70, roomReset, ctrl]);
+  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 72, () => setPreset(m), { size: 14, on: roomPreset === m }]));
+  const right = [['Skins', studio ? 84 : 70, () => { roomPanel = 'skins'; sfx.panel(true); }, ctrl]];
+  if (!studio) right.push(['Hazards', 78, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl], ['Decor', 70, () => { roomPanel = 'decor'; sfx.panel(true); }, ctrl], ['Pet', 58, () => { roomPanel = 'pet'; sfx.panel(true); }, { size: 14, on: !!store.pet && store.pet.day !== dayKey() }]);   // (lit while the pet has a gift waiting)
+  right.push(['Hop', studio ? 64 : 54, () => { initAudio(); roomHop(); }, ctrl], ['Reset', studio ? 76 : 64, roomReset, ctrl]);
   let x = 10; for (const [label, w, fn, o] of left) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
   x = W - 10 - right.reduce((n, it) => n + it[1] + gap, -gap); for (const [label, w, fn, o] of right) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
 }
@@ -584,8 +586,8 @@ function drawDecorPanel() {
     DECOR.filter(d => d.slot === s.id).forEach((it, i) => {
       const bx = cx0 + 14 + i * 90, by = cy0 + 32, bw = 84, bh = ch - 8 - 38, owned = !!store.decor.owned[it.id], on = store.decor.placed[s.id] === it.id, afford = store.wallet >= it.cost;
       ctx.fillStyle = on ? 'rgba(255,214,236,.95)' : '#fff'; rr(bx, by, bw, bh, 16); ctx.fill(); ctx.lineWidth = on ? 4 : 2.5; ctx.strokeStyle = on ? C.hot : C.blush; ctx.stroke();
-      ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by + 2, bw - 4, 66); ctx.clip(); ctx.translate(bx + bw / 2, by + 36 + s.ic); ctx.scale(s.sc, s.sc); if (!owned && !afford) ctx.globalAlpha = .55; it.paint(); ctx.restore();
-      txt(it.name, bx + bw / 2, by + 80, 12, owned ? '#b03a82' : C.plum, null);
+      ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by + 2, bw - 4, 66); ctx.clip(); ctx.translate(bx + bw / 2, by + 36 + s.ic); ctx.scale(s.sc, s.sc); if (!owned && !afford) ctx.globalAlpha = .55; paintDecor(it, owned ? store.decor.tier[it.id] | 0 : 0, owned ? store.decor.dye[it.id] | 0 : 0); ctx.restore();
+      txt(it.name + (owned && store.decor.tier[it.id] ? ' ' + '★'.repeat(store.decor.tier[it.id]) : ''), bx + bw / 2, by + 80, 12, owned ? '#b03a82' : C.plum, null);
       txt(owned ? (on ? 'on ✓' : 'owned') : '♥ ' + it.cost, bx + bw / 2, by + 100, 13, owned ? C.mauve : (afford ? C.hot : '#9a86a8'), null);
       ui.push({ x: bx, y: by, w: bw, h: bh, label: 'decor ' + it.id, fn: () => {
         const r = buyDecor(it.id);
@@ -593,11 +595,80 @@ function drawDecorPanel() {
       } });
     });
   });
+  btn('Style ▸', W / 2 - 220, py + ph - 66, 140, 48, () => { roomPanel = 'style'; sfx.click(); }, { size: 19 });
+  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+}
+// swatch colour of dye idx: the pink most of the decor is made of, shifted
+const dyeSwatch = idx => dyeColor('#ff7ab8', dyeHue(idx));
+// the Style panel: upgrade and recolour what is placed in the room (tiers and dyes, see room.js)
+function drawStylePanel() {
+  const pw = 880, rowH = 56, ph = 6 * rowH + 140, px = (W - pw) / 2, py = Math.max(6, (H - ph) / 2 - 6), close = () => { roomPanel = null; sfx.panel(false); }, d = store.decor;
+  ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
+  ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
+  ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
+  txt('Style your things', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
+  DECOR_SLOTS.forEach((s, k) => {
+    const y = py + 58 + k * rowH, it = decorItem(d.placed[s.id]), t = it ? d.tier[it.id] | 0 : 0, mid = y + (rowH - 8) / 2;
+    ctx.fillStyle = 'rgba(245,235,250,.8)'; rr(px + 16, y, pw - 32, rowH - 8, 16); ctx.fill();
+    if (!it) { txt(s.name + ': nothing placed yet', px + 34, mid, 15, '#9a86a8', null, 'left'); return; }
+    ctx.save(); ctx.beginPath(); ctx.rect(px + 22, y + 2, 52, rowH - 12); ctx.clip(); ctx.translate(px + 48, mid + s.ic * .55); ctx.scale(s.sc * .62, s.sc * .62); paintDecor(it, t, d.dye[it.id] | 0); ctx.restore();
+    txt(it.name, px + 84, mid - 9, 15, '#b03a82', null, 'left'); txt(TIERS[t] + (t ? ' ' + '★'.repeat(t) : ''), px + 84, mid + 10, 12, C.mauve, null, 'left');
+    const next = t < 2 ? tierCost(it, t + 1) : 0;
+    btn(t < 2 ? TIERS[t + 1] + '  ♥ ' + next : 'Golden ✓', px + 230, y + 2, 150, rowH - 12, () => {
+      const r = upgradeDecor(it.id); if (r === 'upgraded') { sfx.unlock(); say(it.name + ' is now ' + TIERS[d.tier[it.id]] + '!'); } else if (r === 'short') { sfx.error(); say(`${next - store.wallet} more hearts to upgrade the ${it.name.toLowerCase()}`); } else sfx.click();
+    }, { size: 15, r: 14, off: t >= 2, on: false });
+    DYES.forEach((dy, i) => {
+      const bx = px + 400 + i * 74, owned = !!(d.dyes[it.id] >> i & 1), cur = (d.dye[it.id] | 0) === i;
+      btn('', bx, y + 2, 68, rowH - 12, () => { const r = dyeDecor(it.id, i); if (r === 'bought') { sfx.unlock(); say(dy.name + ' for the ' + it.name.toLowerCase()); } else if (r === 'short') { sfx.error(); say(`${dy.cost - store.wallet} more hearts for ${dy.name}`); } else sfx.click(); }, { r: 14, on: cur });
+      ctx.fillStyle = dyeSwatch(i); dcirc(bx + 20, mid, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+      txt(owned ? '' : '♥' + dy.cost, bx + 48, mid + 1, 12, owned ? C.mauve : C.hot, null);
+    });
+  });
+  btn('‹ Shop', W / 2 - 220, py + ph - 66, 140, 48, () => { roomPanel = 'decor'; sfx.click(); }, { size: 19 });
+  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+}
+// the Pet panel: adopt, feed, rename, recolour and collect the daily gift
+function drawPetPanel() {
+  const pw = 780, ph = 490, px = (W - pw) / 2, py = Math.max(6, (H - ph) / 2 - 6), close = () => { roomPanel = null; sfx.panel(false); }, p = store.pet;
+  ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
+  ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
+  ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
+  if (!p) {   // choose a friend (free)
+    txt('Adopt a friend', W / 2, py + 40, 28, C.pink, null); txt('It is free. Feed it hearts and it grows up, and finds hearts for you every day.', W / 2, py + 76, 15, C.mauve, null);
+    PET_KINDS.forEach(([kind, name], i) => {
+      const bx = px + 40 + i * 236, by = py + 110, bw = 220, bh = 260;
+      btn('', bx, by, bw, bh, () => { if (petAdopt(kind)) { sfx.unlock(); say('Say hi to ' + store.pet.name + '!'); } }, { r: 22 });
+      ctx.save(); drawPet({ kind, love: 0, dye: 0 }, bx + bw / 2, by + 170, 1.7); ctx.restore(); txt(name, bx + bw / 2, by + 214, 22, C.pink, null); txt('adopt', bx + bw / 2, by + 238, 14, C.mauve, null);
+    });
+    btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 }); return;
+  }
+  const st = petStage(p.love), next = PET_STAGES[st + 1], lo = PET_STAGES[st][1], cx0 = px + 40 + 120;
+  txt(PET_KINDS.find(k => k[0] === p.kind)[1], px + 40 + 120, py + 40, 16, C.mauve, null); walletChip(px + pw - 130, py + 14);
+  ctx.fillStyle = 'rgba(245,235,250,.8)'; rr(px + 30, py + 60, 250, 300, 24); ctx.fill(); drawPet(p, cx0, py + 320, 2);
+  const rx = px + 310, rw = 440;
+  txt(p.name, rx, py + 92, 30, C.pink, null, 'left'); btn('Rename', rx + rw - 110, py + 70, 110, 44, () => { sfx.click(); askText('Name your friend', p.name, s => { p.name = cleanName(s, p.name).slice(0, 12); persist(); }, { max: 12, hint: 'A name' }); }, { size: 16, r: 14 });
+  txt(PET_STAGES[st][0] + '  ·  stage ' + (st + 1) + ' of ' + PET_STAGES.length, rx, py + 134, 18, C.plum, null, 'left');
+  ctx.fillStyle = 'rgba(200,160,220,.4)'; rr(rx, py + 152, rw, 18, 9); ctx.fill();
+  const frac = next ? clamp((p.love - lo) / (next[1] - lo), 0, 1) : 1; ctx.fillStyle = '#ff7ab8'; rr(rx, py + 152, Math.max(18, rw * frac), 18, 9); ctx.fill();
+  txt(next ? `${p.love} / ${next[1]} love  ·  next: ${next[0]}` : `${p.love} love  ·  fully grown!`, rx, py + 184, 14, C.mauve, null, 'left');
+  PET_FOOD.forEach((f, i) => btn(f.name, rx + i * 150, py + 206, 140, 78, () => {
+    const r = petFeed(f.id); if (r === 'short') { sfx.error(); say(`${f.cost - store.wallet} more hearts for a ${f.name.toLowerCase()}`); } else if (r === 'grew') { sfx.unlock(); say(p.name + ' grew into a ' + PET_STAGES[petStage(p.love)][0] + '!', 4); } else { sfx.bloop(1); }
+  }, { size: 20, sub: '♥ ' + f.cost + '  ·  +' + f.love + ' love', ssize: 14, r: 18, off: false }));
+  const gift = p.day !== dayKey(), amt = petGiftAmount(p);
+  btn(gift ? `${p.name} found ${amt} hearts today!  Collect` : `Come back tomorrow for more hearts`, rx, py + 300, rw, 54, () => { const n = petGift(); if (n) { sfx.unlock(); say('+' + n + ' hearts from ' + p.name); } else sfx.click(); }, { size: 17, r: 18, on: gift, off: !gift });
+  txt('Colour', rx, py + 384, 15, C.plum, null, 'left');
+  DYES.forEach((dy, i) => {
+    const bx = rx + 62 + i * 62, owned = !!(p.dyes >> i & 1), cost = dy.cost * 2;
+    btn('', bx, py + 366, 58, 44, () => { const r = petDye(i); if (r === 'bought') { sfx.unlock(); say(dy.name + ' for ' + p.name); } else if (r === 'short') { sfx.error(); say(`${cost - store.wallet} more hearts for ${dy.name}`); } else sfx.click(); }, { r: 14, on: (p.dye | 0) === i });
+    ctx.fillStyle = dyeSwatch(i); dcirc(bx + 18, py + 388, 10); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); if (!owned) txt('♥' + cost, bx + 44, py + 389, 11, C.hot, null);
+  });
   btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
 }
 function drawPicker() {
   if (roomPanel === 'goals') { drawGoals(); return; }
   if (roomPanel === 'decor') { drawDecorPanel(); return; }
+  if (roomPanel === 'style') { drawStylePanel(); return; }
+  if (roomPanel === 'pet') { drawPetPanel(); return; }
   const isSk = roomPanel === 'skins', items = isSk ? SKINS : HAZ, cols = isSk ? 3 : 5, cw = 128, ch = 136, rows = Math.ceil(items.length / cols);
   const pw = cols * cw + 40, ph = rows * ch + 134, px = (W - pw) / 2, py = (H - ph) / 2 - 6, close = () => { roomPanel = null; sfx.panel(false); };
   ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });

@@ -41,12 +41,108 @@ const decorItem = id => DECOR.find(d => d.id === id);
 // buy (when affordable) or toggle an item: 'bought' | 'placed' | 'removed' | 'short' (not enough hearts) | 'none' (no such item)
 function buyDecor(id) {
   const it = decorItem(id), d = store.decor; if (!it) return 'none';
-  if (!d.owned[id]) { if (store.wallet < it.cost) return 'short'; store.wallet -= it.cost; d.owned[id] = true; d.placed[it.slot] = id; persist(); return 'bought'; }
+  if (!d.owned[id]) { if (store.wallet < it.cost) return 'short'; store.wallet -= it.cost; d.owned[id] = true; d.tier[id] = 0; d.dye[id] = 0; d.dyes[id] = 1; d.placed[it.slot] = id; persist(); return 'bought'; }
   if (d.placed[it.slot] === id) { delete d.placed[it.slot]; persist(); return 'removed'; }
   d.placed[it.slot] = id; persist(); return 'placed';
 }
+/* Tiers and dyes are how the same 18 things keep being worth saving for. Every item can be upgraded Basic -> Deluxe (sparkles) -> Golden (a warm glow and more sparkles), at 4x and 10x its price;
+   and recoloured: four hue dyes (20 hearts each), and Rainbow (150), which cycles. A dye is bought once per item and can then be switched freely. */
+const TIERS = ['Basic', 'Deluxe', 'Golden'], TIER_MULT = [1, 4, 10];
+const DYES = [{ name: 'Original', hue: 0, cost: 0 }, { name: 'Mint', hue: 150, cost: 20 }, { name: 'Sky', hue: 200, cost: 20 }, { name: 'Grape', hue: 265, cost: 20 }, { name: 'Cherry', hue: 335, cost: 20 }, { name: 'Rainbow', hue: -1, cost: 150 }];
+const tierCost = (it, tier) => it.cost * TIER_MULT[tier];   // the price of getting `it` to `tier` (1 or 2)
+function upgradeDecor(id) {   // 'upgraded' | 'short' | 'max' | 'none' (not owned)
+  const it = decorItem(id), d = store.decor; if (!it || !d.owned[id]) return 'none';
+  const t = d.tier[id] | 0; if (t >= 2) return 'max'; const c = tierCost(it, t + 1); if (store.wallet < c) return 'short';
+  store.wallet -= c; d.tier[id] = t + 1; persist(); return 'upgraded';
+}
+function dyeDecor(id, idx) {   // buy (when needed) and put on dye number idx: 'bought' | 'set' | 'short' | 'none'
+  const d = store.decor; if (!decorItem(id) || !d.owned[id] || !(idx >= 0 && idx < DYES.length)) return 'none';
+  if (!(d.dyes[id] >> idx & 1)) { if (store.wallet < DYES[idx].cost) return 'short'; store.wallet -= DYES[idx].cost; d.dyes[id] |= 1 << idx; d.dye[id] = idx; persist(); return 'bought'; }
+  d.dye[id] = idx; persist(); return 'set';
+}
+// recolouring without a canvas filter (iPad Safari has none): while a painter runs, every colour it sets is hue-shifted; greys, whites and the dark ink keep their colour
+const dyeCache = new Map();
+function dyeColor(v, hue) {
+  if (typeof v !== 'string' || !/^#[0-9a-f]{6}$/i.test(v) || hue === 0) return v;
+  const key = v + '|' + Math.round(hue / 2); let out = dyeCache.get(key); if (out) return out;
+  const r = parseInt(v.slice(1, 3), 16) / 255, g = parseInt(v.slice(3, 5), 16) / 255, b = parseInt(v.slice(5, 7), 16) / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dl = mx - mn;
+  if (dl < .1 || l < .25 || l > .93) out = v;
+  else {
+    const s = dl / (1 - Math.abs(2 * l - 1)); let h = mx === r ? ((g - b) / dl) % 6 : mx === g ? (b - r) / dl + 2 : (r - g) / dl + 4; h = ((h * 60 + hue) % 360 + 360) % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, k = Math.floor(h / 60), rgb = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][k % 6];
+    out = '#' + rgb.map(q => Math.round((q + m) * 255).toString(16).padStart(2, '0')).join('');
+  }
+  dyeCache.set(key, out); return out;
+}
+function withDye(hue, fn) {
+  if (hue === 0) { fn(); return; }
+  const proto = Object.getPrototypeOf(ctx), fd = Object.getOwnPropertyDescriptor(proto, 'fillStyle'), sd = Object.getOwnPropertyDescriptor(proto, 'strokeStyle');
+  Object.defineProperty(ctx, 'fillStyle', { configurable: true, get() { return fd.get.call(ctx); }, set(v) { fd.set.call(ctx, dyeColor(v, hue)); } });
+  Object.defineProperty(ctx, 'strokeStyle', { configurable: true, get() { return sd.get.call(ctx); }, set(v) { sd.set.call(ctx, dyeColor(v, hue)); } });
+  try { fn(); } finally { delete ctx.fillStyle; delete ctx.strokeStyle; }
+}
+const dyeHue = idx => DYES[idx].hue < 0 ? (tg * 60) % 360 : DYES[idx].hue;
+// where each place's sparkles drift (around the item's own origin), for the Deluxe and Golden looks
+const DECOR_FX = { window: [0, 0, 56, 62], garland: [0, 34, 250, 22], lamp: [0, 66, 42, 32], friend: [0, -52, 30, 52], rug: [0, 0, 170, 14], plant: [0, -52, 28, 52] };
+function drawTierFx(slot, tier, n0) {
+  const [fx, fy, rx, ry] = DECOR_FX[slot];
+  if (tier >= 2) { const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, Math.max(rx, ry) * 1.15); g.addColorStop(0, 'rgba(255,225,120,.34)'); g.addColorStop(1, 'rgba(255,225,120,0)'); ctx.save(); ctx.translate(fx, fy); ctx.scale(1, ry / Math.max(rx, ry)); ctx.translate(-fx, -fy); ctx.fillStyle = g; ctx.fillRect(fx - rx * 1.2, fy - rx * 1.2, rx * 2.4, rx * 2.4); ctx.restore(); }
+}
+function drawTierSparkles(slot, tier) {
+  const [fx, fy, rx, ry] = DECOR_FX[slot], n = tier >= 2 ? 9 : 5;
+  for (let i = 0; i < n; i++) { const a = i * 2.399 + .7, tw = .5 + .5 * Math.sin(tg * 2.4 + i * 1.9), x = fx + Math.cos(a) * rx * (.4 + .6 * ((i * .37) % 1)), y = fy + Math.sin(a) * ry * (.4 + .6 * ((i * .61) % 1)); ctx.globalAlpha = tw; ctx.fillStyle = tier >= 2 ? '#ffe566' : '#fff'; sparklePath(x, y, 3 + 4 * tw); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+function paintDecor(it, tier, dye) {   // one item as it looks with its tier and dye, around the current origin (the room and the panels both use this)
+  if (tier >= 2) drawTierFx(it.slot, tier);
+  withDye(dyeHue(dye | 0), () => it.paint());
+  if (tier >= 1) drawTierSparkles(it.slot, tier);
+}
 function drawDecor() {   // whatever is placed, on the wall and floor behind the jelly
-  for (const s of DECOR_SLOTS) { const it = decorItem(store.decor.placed[s.id]); if (!it || it.slot !== s.id) continue; ctx.save(); ctx.translate(s.x, s.y); it.paint(); ctx.restore(); }
+  const d = store.decor;
+  for (const s of DECOR_SLOTS) { const it = decorItem(d.placed[s.id]); if (!it || it.slot !== s.id) continue; ctx.save(); ctx.translate(s.x, s.y); paintDecor(it, d.tier[it.id] | 0, d.dye[it.id] | 0); ctx.restore(); }
+}
+
+/* ---------- the pet ----------
+   A companion that lives in the Squish Room. It is adopted once (free; three kinds) and fed with hearts: snacks, treats and feasts give love, and love grows it through six stages (new looks:
+   a bow, a scarf, a crown, wings, a halo). It never gets sick or hungry; it just keeps growing. Once a day it finds a few hearts for you. */
+const PET_KINDS = [['bun', 'Bunny'], ['kit', 'Kitty'], ['bear', 'Bear']];
+const PET_STAGES = [['Baby', 0], ['Kid', 120], ['Teen', 500], ['Grown', 1600], ['Royal', 4000], ['Legend', 9000]];   // [name, love needed]
+const PET_FOOD = [{ id: 'snack', name: 'Snack', cost: 6, love: 12 }, { id: 'treat', name: 'Treat', cost: 30, love: 66 }, { id: 'feast', name: 'Feast', cost: 120, love: 290 }];
+const petStage = love => { let s = 0; PET_STAGES.forEach((p, i) => { if (love >= p[1]) s = i; }); return s; };
+const petGiftAmount = pet => 3 + 3 * petStage(pet.love);
+function petAdopt(kind) { if (store.pet || !PET_KINDS.some(k => k[0] === kind)) return false; store.pet = { kind, name: 'Mochi', love: 0, dyes: 1, dye: 0, day: '' }; persist(); return true; }
+function petFeed(foodId) {   // 'fed' | 'grew' (reached a new stage) | 'short' | 'none'
+  const f = PET_FOOD.find(x => x.id === foodId), p = store.pet; if (!f || !p) return 'none'; if (store.wallet < f.cost) return 'short';
+  const before = petStage(p.love); store.wallet -= f.cost; p.love += f.love; persist(); return petStage(p.love) > before ? 'grew' : 'fed';
+}
+function petGift(day = dayKey()) { const p = store.pet; if (!p || p.day === day) return 0; const n = petGiftAmount(p); p.day = day; store.wallet += n; persist(); return n; }   // hearts found today, or 0 if already taken
+function petDye(idx) {
+  const p = store.pet; if (!p || !(idx >= 0 && idx < DYES.length)) return 'none'; const cost = DYES[idx].cost * 2;
+  if (!(p.dyes >> idx & 1)) { if (store.wallet < cost) return 'short'; store.wallet -= cost; p.dyes |= 1 << idx; p.dye = idx; persist(); return 'bought'; }
+  p.dye = idx; persist(); return 'set';
+}
+// draws a pet with its feet at (x, y): scale grows with its stage; `t` drives the bobbing and blinking
+function drawPet(p, x, y, sc = 1, t = tg) {
+  const st = petStage(p.love), s = sc * (.78 + st * .1), hop = Math.max(0, Math.sin(t * 2.2)) * 6 * s;
+  ctx.save(); ctx.translate(x, y - hop); ctx.scale(s, s * (1 + .04 * Math.sin(t * 4.4)));
+  withDye(dyeHue(p.dye | 0), () => {
+    const body = '#ffc4de', dark = '#ff9ccf';
+    if (st >= 4) { ctx.globalAlpha = .2 + .08 * Math.sin(t * 2); ctx.fillStyle = '#ffe566'; dcirc(0, -34, 46); ctx.fill(); ctx.globalAlpha = 1; }
+    if (st >= 3) { ctx.fillStyle = '#fff'; for (const sg of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sg * 24, -32, 9, 18, sg * .7 + Math.sin(t * 5) * .08 * sg, 0, 7); ctx.fill(); } }   // wings
+    if (p.kind === 'kit') { ctx.strokeStyle = dark; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(18, -10); ctx.quadraticCurveTo(40, -14, 34, -40); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(0, -20, 22, 20, 0, 0, 7); dfill(body, '#fff', 3);
+    if (p.kind === 'bun') for (const sg of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sg * 10, -66, 7, 17, sg * .15, 0, 7); dfill(body, '#fff', 3); ctx.fillStyle = '#ffb3d6'; ctx.beginPath(); ctx.ellipse(sg * 10, -64, 3, 11, sg * .15, 0, 7); ctx.fill(); }
+    else if (p.kind === 'kit') for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sg * 20, -50); ctx.lineTo(sg * 18, -70); ctx.lineTo(sg * 5, -57); dfill(body, '#fff', 3); }
+    else for (const sg of [-1, 1]) { dcirc(sg * 17, -58, 8); dfill(body, '#fff', 3); }
+    dcirc(0, -40, 18); dfill(body, '#fff', 3); ctx.fillStyle = C.ink; const blink = Math.sin(t * 1.3) > .97 ? .5 : 3; ctx.beginPath(); ctx.ellipse(-6.5, -41, 2.6, blink, 0, 0, 7); ctx.ellipse(6.5, -41, 2.6, blink, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,120,170,.6)'; dcirc(-12, -36, 3.6); ctx.fill(); dcirc(12, -36, 3.6); ctx.fill(); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(0, -36, 3, .2 * Math.PI, .8 * Math.PI); ctx.lineWidth = 1.6; ctx.strokeStyle = C.ink; ctx.stroke();
+    if (st >= 1) { ctx.fillStyle = '#ff5fb0'; ctx.beginPath(); ctx.moveTo(10, -54); ctx.lineTo(24, -62); ctx.lineTo(24, -46); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, -54); ctx.lineTo(-4, -62); ctx.lineTo(-4, -46); ctx.fill(); dcirc(10, -54, 4); ctx.fill(); }   // bow
+    if (st >= 2) { ctx.fillStyle = '#c9a8ff'; rr(-17, -27, 34, 8, 4); ctx.fill(); rr(8, -26, 8, 16, 3); ctx.fill(); }   // scarf
+    if (st >= 3) { ctx.fillStyle = '#ffd75e'; ctx.beginPath(); ctx.moveTo(-14, -56); ctx.lineTo(-14, -70); ctx.lineTo(-7, -62); ctx.lineTo(0, -74); ctx.lineTo(7, -62); ctx.lineTo(14, -70); ctx.lineTo(14, -56); ctx.closePath(); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }   // crown
+    if (st >= 5) { ctx.strokeStyle = '#ffe566'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, -82, 15, 4.5, 0, 0, 7); ctx.stroke(); }   // halo
+  });
+  ctx.restore();
 }
 
 /* ---------- squish room ---------- */
