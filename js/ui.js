@@ -34,6 +34,7 @@ function drawTitle() {
   row(364, [['Squish Room', 'poke, drag & fling', enterRoom], ['Squish Studio', 'knead shapes, make music', () => startStudio()], ['Level Creator', 'build & share yours', () => { pickFor = 'edit'; state = 'select'; }]]);
   txt(beaten + ' / ' + OFFICIAL.length + ' levels beaten', W / 2, 470, 18, '#fff', C.plum);
   btn('⚙ Settings', W - 148, 14, 132, 40, () => { sfx.click(); state = 'settings'; }, { size: 17, r: 16 });
+  walletChip(16, 14, 96, 40);
   txt(isTouchUi() ? 'tap to choose  •  headphones recommended' : 'Enter to play  •  1-6 shortcuts  •  M to mute  •  headphones recommended', W / 2, 516, TS.small, '#fff', C.plum);
 }
 // the next official level the player has not beaten (the first level if they are all done, so Play always does something)
@@ -215,7 +216,7 @@ function importSave() {
 }
 function resetProgress() {
   if (resetArm <= 0) { resetArm = 3; say('Tap again to reset your progress (levels you made are kept)', 3); return; }
-  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; persist(); say('Progress reset', 2.5);
+  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; store.wallet = 0; store.hb = {}; store.decor = { owned: {}, placed: {} }; persist(); say('Progress reset', 2.5);
 }
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
@@ -430,7 +431,8 @@ function overlays() {
     });
     { const gr = [['Perfect', judged.PERFECT, 'PERFECT'], ['Great', judged.GREAT, 'GREAT'], ['Good', judged.GOOD, 'GOOD'], ['Ok', judged.OK, 'OK']];   // timing breakdown, in the colours the jump judge uses in the run
       gr.forEach(([nm, n, k], i) => { const x = cx - 220 + i * 111; ctx.fillStyle = GRADES[k][1]; ctx.beginPath(); ctx.arc(x + 8, cy0 + 314, 7, 0, 7); ctx.fill(); txt(nm + ' ' + n, x + 20, cy0 + 315, 15, C.plum, null, 'left'); }); }
-    if (!winInfo.saved && mode === 'dash' && !testing) txt('Chill pace: score and hearts are not saved', cx, cy0 + 338, 13, C.mauve, null);
+    if (winInfo.earned > 0) { const a = ease((winT - 1.1) / .4); ctx.globalAlpha *= a; ctx.fillStyle = C.hot; heartPath(cx - 118, cy0 + 337, 9); ctx.fill(); txt('+' + winInfo.earned + ' hearts for your room' + (winInfo.first ? ' (10 for a first clear)' : ''), cx - 100, cy0 + 338, 15, C.hot, null, 'left'); ctx.globalAlpha = clamp(winT * 2, 0, 1); }
+    else if (!winInfo.saved && mode === 'dash' && !testing) txt('Chill pace: score and hearts are not saved', cx, cy0 + 338, 13, C.mauve, null);
     ctx.restore();
     if (winT > 1.2) { ctx.globalAlpha = .6 + .4 * Math.sin(tg * 4); txt(testing ? 'tap to return to the editor' : 'tap to continue', cx, cy0 + ch + 24, 22, '#fff', C.plum); }
     ctx.globalAlpha = 1;
@@ -508,6 +510,7 @@ function drawRoom() {
   ctx.fillStyle = fg; rr(RM.l - 14, RM.b, RM.r - RM.l + 28, 88, 20); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.fillRect(RM.l - 8, RM.b, RM.r - RM.l + 16, 7);
   if (studio && flow > .05) { ctx.fillStyle = 'rgba(255,190,235,' + (.16 * BP * flow).toFixed(3) + ')'; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t); }   // the room pulses with the beat as you build the song
+  if (!studio) drawDecor();
   drawParts(0);
   const pulling = room.grabs.some(g => !g.pin);
   drawSoft(room, 0, { ground: RM.b, open: pulling || room.inds.length > 0, squint: pulling && roomElong > .35 });
@@ -517,7 +520,8 @@ function drawRoom() {
   const liveUi = ui; if (roomPanel) ui = [];   // while a picker is open the floor is dimmed and cannot be pressed
   if (studio) drawStudioUI();
   floorBar();
-  if (!studio) btn('★ ' + goalsDone() + '/' + GOALS.length, RM.l + 8, RM.t + 8, 116, 42, () => { roomPanel = 'goals'; sfx.panel(true); }, { size: 16, r: 14 });   // the goals card (drawGoals)
+  if (!studio) { btn('★ ' + goalsDone() + '/' + GOALS.length, RM.l + 8, RM.t + 8, 116, 42, () => { roomPanel = 'goals'; sfx.panel(true); }, { size: 16, r: 14 });   // the goals card (drawGoals)
+    walletChip(RM.l + 132, RM.t + 8); }
   ui = liveUi;
   txt(studio ? 'Squish Studio' : PRESETS[roomPreset].name, W / 2, 28, 24, '#fff', C.plum);
   txt(studio ? (isTouchUi() ? 'knead the dough to match the dotted outline  •  hold = pin' : 'knead the dough to match the dotted outline  •  drag = pull  •  press = dent  •  right-click = pin') : isTouchUi() ? 'drag = pull  •  press = dent  •  hold = pin' : 'press inside = dent  •  drag the skin = pull  •  right-click = pin  •  space = hop  •  R reset  •  Esc menu', W / 2, 520, TS.small, '#fff', C.plum);
@@ -533,10 +537,10 @@ function floorBar() {
   const y = 464, h = 38, gap = 6, ctrl = { size: 14 }, clip = { x0: 0, y0: RM.b + 3, x1: W, y1: H };   // clip: touch growth may not climb into the play area
   const left = [['‹ Back', 78, () => { sfx.back(); toTitle(); }, ctrl]];
   if (studio) left.push(...studioControls());
-  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 88, () => setPreset(m), { size: 14, on: roomPreset === m }]));
-  const right = [['Skins', 84, () => { roomPanel = 'skins'; sfx.panel(true); }, ctrl]];
-  if (!studio) right.push(['Hazards', 96, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl]);
-  right.push(['Hop', 64, () => { initAudio(); roomHop(); }, ctrl], ['Reset', 76, roomReset, ctrl]);
+  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 80, () => setPreset(m), { size: 14, on: roomPreset === m }]));
+  const right = [['Skins', studio ? 84 : 76, () => { roomPanel = 'skins'; sfx.panel(true); }, ctrl]];
+  if (!studio) right.push(['Hazards', 84, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl], ['Decor', 78, () => { roomPanel = 'decor'; sfx.panel(true); }, ctrl]);
+  right.push(['Hop', 64, () => { initAudio(); roomHop(); }, ctrl], ['Reset', studio ? 76 : 70, roomReset, ctrl]);
   let x = 10; for (const [label, w, fn, o] of left) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
   x = W - 10 - right.reduce((n, it) => n + it[1] + gap, -gap); for (const [label, w, fn, o] of right) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
 }
@@ -561,8 +565,39 @@ function drawGoals() {
   btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
 }
 // a big, finger-sized chooser for jelly skins and hazard looks (locked ones say what unlocks them)
+// the heart wallet: a small pill with the hearts you can spend in the Squish Room
+function walletChip(x, y, w = 96, h = 42) {
+  ctx.fillStyle = 'rgba(255,255,255,.72)'; rr(x, y, w, h, h / 2); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.blush; ctx.stroke();
+  ctx.fillStyle = C.hot; heartPath(x + 24, y + h / 2, 11); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+  txt(String(store.wallet), x + 42, y + h / 2 + 1, 20, C.plum, null, 'left');
+}
+// the Decor panel: six places, three things each; tap to buy (hearts), put on, or take off
+function drawDecorPanel() {
+  const cols = 3, cw = 288, ch = 168, pw = cols * cw + 40, ph = 2 * ch + 150, px = (W - pw) / 2, py = Math.max(6, (H - ph) / 2 - 6), close = () => { roomPanel = null; sfx.panel(false); };
+  ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
+  ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
+  ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
+  txt('Decorate your room', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
+  DECOR_SLOTS.forEach((s, k) => {
+    const cx0 = px + 20 + (k % cols) * cw, cy0 = py + 58 + Math.floor(k / cols) * ch;
+    ctx.fillStyle = 'rgba(245,235,250,.8)'; rr(cx0 + 4, cy0, cw - 8, ch - 8, 18); ctx.fill(); txt(s.name, cx0 + cw / 2, cy0 + 17, 16, C.plum, null);
+    DECOR.filter(d => d.slot === s.id).forEach((it, i) => {
+      const bx = cx0 + 14 + i * 90, by = cy0 + 32, bw = 84, bh = ch - 8 - 38, owned = !!store.decor.owned[it.id], on = store.decor.placed[s.id] === it.id, afford = store.wallet >= it.cost;
+      ctx.fillStyle = on ? 'rgba(255,214,236,.95)' : '#fff'; rr(bx, by, bw, bh, 16); ctx.fill(); ctx.lineWidth = on ? 4 : 2.5; ctx.strokeStyle = on ? C.hot : C.blush; ctx.stroke();
+      ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by + 2, bw - 4, 66); ctx.clip(); ctx.translate(bx + bw / 2, by + 36 + s.ic); ctx.scale(s.sc, s.sc); if (!owned && !afford) ctx.globalAlpha = .55; it.paint(); ctx.restore();
+      txt(it.name, bx + bw / 2, by + 80, 12, owned ? '#b03a82' : C.plum, null);
+      txt(owned ? (on ? 'on ✓' : 'owned') : '♥ ' + it.cost, bx + bw / 2, by + 100, 13, owned ? C.mauve : (afford ? C.hot : '#9a86a8'), null);
+      ui.push({ x: bx, y: by, w: bw, h: bh, label: 'decor ' + it.id, fn: () => {
+        const r = buyDecor(it.id);
+        if (r === 'short') { sfx.error(); say(`${it.cost - store.wallet} more hearts for the ${it.name.toLowerCase()}`); } else if (r === 'bought') { sfx.unlock(); say('New: ' + it.name + '!'); } else sfx.click();
+      } });
+    });
+  });
+  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+}
 function drawPicker() {
   if (roomPanel === 'goals') { drawGoals(); return; }
+  if (roomPanel === 'decor') { drawDecorPanel(); return; }
   const isSk = roomPanel === 'skins', items = isSk ? SKINS : HAZ, cols = isSk ? 3 : 5, cw = 128, ch = 136, rows = Math.ceil(items.length / cols);
   const pw = cols * cw + 40, ph = rows * ch + 134, px = (W - pw) / 2, py = (H - ph) / 2 - 6, close = () => { roomPanel = null; sfx.panel(false); };
   ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });

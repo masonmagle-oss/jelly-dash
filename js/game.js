@@ -168,7 +168,7 @@ function win() {
   state = 'win'; winT = 0; setHum(0); humOn = 0; songStop(); ambStop();
   const acc = judgeN ? judgeBase / (100 * judgeN) : 1; winStars = acc >= .8 ? 3 : acc >= .6 ? 2 : 1;   // rhythm rating from timing accuracy
   { const id = curLevel.id, scored = !testing && mode === 'dash' && (store.pace || 1) >= 1, ps = store.score[id] || 0;
-    winInfo = { first: !testing && mode === 'dash' && (store.best[id] || 0) < 100, bestScore: scored && ps > 0 && scoreNow > ps, bestStars: scored && winStars > (store.rate[id] || 0) && (store.rate[id] || 0) > 0, saved: scored, unlocked: [], prevScore: ps }; }
+    winInfo = { first: !testing && mode === 'dash' && (store.best[id] || 0) < 100, bestScore: scored && ps > 0 && scoreNow > ps, bestStars: scored && winStars > (store.rate[id] || 0) && (store.rate[id] || 0) > 0, saved: scored, unlocked: [], prevScore: ps, earned: 0 }; }
   winJingle();
   if (!testing && mode === 'dash') {
     const before = doneCount();
@@ -176,6 +176,10 @@ function win() {
     if ((store.pace || 1) >= 1) {   // scores and hearts are for Normal pace and up; Chill is for learning a level
       if (scoreNow > (store.score[curLevel.id] || 0)) store.score[curLevel.id] = scoreNow;
       if (winStars > (store.rate[curLevel.id] || 0)) store.rate[curLevel.id] = winStars;
+      if (OFFICIAL.includes(curLevel)) {   // hearts for the cozy room: only ones not taken before in this level (replays cannot be farmed), plus 10 for a first clear; levels from the editor pay nothing
+        const id = curLevel.id, prev = store.hb[id] || 0, gain = Math.max(0, got - prev) + (winInfo.first ? 10 : 0);
+        store.hb[id] = Math.max(prev, got); store.wallet += gain; winInfo.earned = gain;
+      }
     }
     persist();
     const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];

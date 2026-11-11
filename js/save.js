@@ -3,7 +3,7 @@
    Modules are classic scripts that share one global scope (so they can be loaded in order from index.html, in the order listed there). */
 
 /* ================= persistence ================= */
-const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 4;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
+const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 5;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const num = (v, d) => Number.isFinite(+v) && v !== null && v !== '' ? +v : d;
 const DEFAULT_SET = { music: .8, sfx: .9, haptics: true, reduceMotion: null, tumble: true };   // reduceMotion: null = follow the device's setting
@@ -15,6 +15,11 @@ function normalizeStore(raw) {
   st.studio = isObj(r.studio) ? r.studio : {}; st.studio.stars = isObj(st.studio.stars) ? st.studio.stars : {};
   const gl = isObj(r.goals) ? r.goals : {}, cnt = (v, d = 0) => Math.max(0, Math.floor(num(v, d))), txtOf = v => typeof v === 'string' && v.length <= 12 ? v : '';   // the Squish Room goals (room.js)
   st.goals = { done: isObj(gl.done) ? gl.done : {}, mats: isObj(gl.mats) ? gl.mats : {}, hops: cnt(gl.hops), secs: Math.max(0, num(gl.secs, 0)), day: txtOf(gl.day), daySecs: Math.max(0, num(gl.daySecs, 0)), cozyDays: cnt(gl.cozyDays), streak: cnt(gl.streak), lastCozy: txtOf(gl.lastCozy) };
+  // the cozy room: the heart wallet, the most hearts taken in each level (so replays pay only for new ones), and the decor bought and placed (room.js DECOR)
+  const idOf = v => typeof v === 'string' && /^[a-z0-9]{1,16}$/.test(v), dr = isObj(r.decor) ? r.decor : {};
+  st.wallet = Math.min(1e6, cnt(r.wallet)); st.hb = {}; if (isObj(r.hb)) for (const k of Object.keys(r.hb).slice(0, 400)) st.hb[k] = Math.min(9999, cnt(r.hb[k]));
+  st.decor = { owned: {}, placed: {} }; if (isObj(dr.owned)) for (const k of Object.keys(dr.owned).slice(0, 80)) if (idOf(k) && dr.owned[k] === true) st.decor.owned[k] = true;
+  if (isObj(dr.placed)) for (const k of Object.keys(dr.placed).slice(0, 20)) if (idOf(k) && idOf(dr.placed[k]) && st.decor.owned[dr.placed[k]]) st.decor.placed[k] = dr.placed[k];   // only things you own can be placed
   st.pace = num(st.pace, 1) > 0 ? num(st.pace, 1) : 1; st.haz = Math.max(0, Math.floor(num(st.haz, 0))); st.skin = Math.max(0, Math.floor(num(st.skin, 0)));
   const sv = isObj(r.set) ? r.set : {}; st.set = Object.assign({}, DEFAULT_SET, sv);
   st.set.music = clamp(num(sv.music, DEFAULT_SET.music), 0, 1); st.set.sfx = clamp(num(sv.sfx, DEFAULT_SET.sfx), 0, 1);
