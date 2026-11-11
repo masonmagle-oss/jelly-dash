@@ -360,15 +360,18 @@ function hud() {
   const g = ctx.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, '#ff9ccf'); g.addColorStop(1, '#c86bff');
   ctx.fillStyle = g; rr(bx, by, Math.max(bh, bw * prog), bh, 7); ctx.fill();
   ctx.fillStyle = C.hot; heartPath(bx + bw * prog, by + 7, 10); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
-  txt(Math.floor(prog * 100) + '%', W / 2, 52, 20, '#fff', C.plum);
-  ctx.fillStyle = C.hot; heartPath(34, 32, 12); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
-  txt(`${got}/${hearts.length}`, 54, 33, 22, '#fff', C.plum, 'left');
-  txt(curLevel.name + '  ♪ ' + Math.round(curBpm), 24, 64, 18, '#fff', C.plum, 'left');
-  txt('Score ' + scoreNow + (combo >= 2 ? '   x' + (1 + Math.min(combo, 10) * .1).toFixed(1) + ' combo' : ''), W / 2, 80, 18, '#fff', C.plum);
-  if (mode === 'dash') { txt('Attempt ' + attempts, W - 84, 33, 20, '#fff', C.plum, 'right'); const b = bestOf(curLevel.id); if (b && !testing) txt('Best ' + b + '%', W - 84, 58, 16, '#fff', C.plum, 'right'); }
-  else if (mode === 'practice') { txt('Practice', W - 84, 33, 20, '#fff', C.plum, 'right'); txt('attempt ' + attempts + ' • not saved', W - 84, 58, 16, '#fff', C.plum, 'right'); practiceHud(); }
-  else txt('Zen mode', W - 84, 33, 20, '#fff', C.plum, 'right');
-  if (testing) txt('TEST • ☰ = back to editor', W - 84, 58, 15, '#fff', C.plum, 'right');
+  // three soft pills, each with one job: hearts (left), progress + score (centre, under the bar), attempt + best (right, beside the menu)
+  const pill = (x, y, w, h, fill) => { ctx.fillStyle = fill || 'rgba(255,255,255,.58)'; rr(x, y, w, h, h / 2); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke(); };
+  pill(14, 12, 116, 40); ctx.fillStyle = C.hot; heartPath(38, 32, 12); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+  txt(`${got}/${hearts.length}`, 58, 33, 22, C.plum, null, 'left');
+  txt(curLevel.name + '  ♪ ' + Math.round(curBpm), 22, 70, 17, '#fff', C.plum, 'left');
+  pill(W / 2 - 124, 42, 248, 36); txt(Math.floor(prog * 100) + '%', W / 2 - 76, 61, 21, C.pink, '#fff'); txt('Score ' + scoreNow, W / 2 + 36, 61, 17, C.plum, null);
+  if (combo >= 2) { const pop = 1 + .08 * Math.sin(tg * 14); ctx.save(); ctx.translate(W / 2 - 192, 60); ctx.scale(pop, pop); pill(-58, -16, 116, 32, 'rgba(255,95,176,.92)'); txt('x' + (1 + Math.min(combo, 10) * .1).toFixed(1) + ' combo', 0, 1, 16, '#fff', null); ctx.restore(); }   // beside the score pill, clear of the tips that appear under it
+  const rp = (a, b) => { pill(W - 268, 12, 186, 40); txt(a, W - 175, 27, 18, C.plum, null); txt(b, W - 175, 44, 13, C.mauve, null); };
+  if (testing) rp('TEST', '☰ = back to editor');
+  else if (mode === 'dash') { const b = bestOf(curLevel.id); rp('Attempt ' + attempts, b ? 'Best ' + b + '%' : 'first try!'); }
+  else if (mode === 'practice') { rp('Practice', 'attempt ' + attempts + ' • not saved'); practiceHud(); }
+  else rp('Zen mode', 'no oopsies');
   // menu button (tap twice to leave a run)
   ctx.fillStyle = menuArm > 0 ? 'rgba(255,95,176,.95)' : 'rgba(255,255,255,.7)'; rr(W - 72, 10, 52, 40, 14); ctx.fill();
   ctx.strokeStyle = menuArm > 0 ? '#fff' : '#ff8fc7'; ctx.lineWidth = 3; ctx.stroke();
@@ -379,17 +382,39 @@ function overlays() {
     // the dim eases in and out and stays light, so repeated retries never flash the whole screen (it used to snap from dark back to bright on every restart)
     const fa = clamp(deadT * 4, 0, 1) * clamp((.7 - deadT) * 6, 0, 1);
     ctx.globalAlpha = fa * .45; ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ctx.globalAlpha = fa;
-    txt('Oopsie!', W / 2, 190, 70, C.pink, '#fff'); txt(lastPct + '%  •  tap to retry', W / 2, 250, 26, '#fff', C.plum);
+    // how far you got, against your best: a bar with a marker, so every try shows whether it was progress
+    const best = Math.max(bestOf(curLevel.id), lastPct), isBest = mode === 'dash' && !testing && lastPct >= best && lastPct > 0, bx = W / 2 - 190, by = 232, bw = 380;
+    txt('Oopsie!', W / 2, 180, 64, C.pink, '#fff');
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; rr(bx, by, bw, 22, 11); ctx.fill();
+    const g = ctx.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, '#ff9ccf'); g.addColorStop(1, '#c86bff'); ctx.fillStyle = g; rr(bx, by, Math.max(22, bw * lastPct / 100), 22, 11); ctx.fill();
+    if (!testing && best > lastPct) { ctx.fillStyle = C.gold; rr(bx + bw * best / 100 - 3, by - 6, 6, 34, 3); ctx.fill(); txt('best ' + best + '%', bx + bw * best / 100, by + 46, 15, '#fff', C.plum); }
+    txt(lastPct + '%', bx + Math.max(0, bw * lastPct / 100 - 24), by - 20, 26, '#fff', C.plum, 'left');
+    if (isBest) txt('NEW BEST!', W / 2, by + 52, 24, C.gold, '#fff');
+    txt('tap to retry', W / 2, by + 92, 22, '#fff', C.plum);
     ctx.globalAlpha = 1;
   } else if (state === 'win') {
     ctx.globalAlpha = clamp(winT * 2, 0, 1); ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H);
-    txt('Level Complete!', W / 2, 160, 66, C.pink, '#fff');
-    txt(`${got}/${hearts.length} hearts` + (mode === 'dash' ? `  •  ${attempts} attempt${attempts > 1 ? 's' : ''}` : mode === 'practice' ? '  •  practice (not saved)' : ''), W / 2, 222, 26, '#fff', C.plum);
-    const tacc = judgeN ? Math.round(judgeBase / judgeN) : 100;
-    txt(`Score ${scoreNow}   •   Timing ${tacc}%`, W / 2, 262, 28, C.pink, '#fff');
-    txt(`Perfect ${judged.PERFECT}   Great ${judged.GREAT}   Good ${judged.GOOD}   Ok ${judged.OK}`, W / 2, 298, 20, '#fff', C.plum);
-    for (let i = 0; i < 3; i++) { ctx.fillStyle = i < winStars ? C.hot : 'rgba(255,255,255,.55)'; heartPath(W / 2 - 52 + i * 52, 340, 17); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-    if (winT > 1.2) txt(testing ? 'tap to return to the editor' : 'tap to continue', W / 2, 390, 22, '#fff', C.plum);
+    const cx = W / 2, cy0 = 142, cw = 500, ch = 360, ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3), back = t => { t = clamp(t, 0, 1); const c = 1.8; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+    ctx.save(); ctx.translate(cx, cy0 + ch / 2); const pop = .92 + .08 * back(winT * 2.2); ctx.scale(pop, pop); ctx.translate(-cx, -(cy0 + ch / 2));   // the card pops in
+    ctx.fillStyle = 'rgba(255,255,255,.95)'; rr(cx - cw / 2, cy0, cw, ch, 32); ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = C.blush; ctx.stroke();
+    txt('Level Complete!', cx, cy0 + 40, 42, C.pink, '#fff');
+    txt(curLevel.name + (mode === 'dash' && !testing ? '  ·  ' + attempts + ' attempt' + (attempts > 1 ? 's' : '') : mode === 'practice' ? '  ·  practice (not saved)' : ''), cx, cy0 + 76, 19, C.mauve, null);
+    const tags = []; if (winInfo.first) tags.push(['FIRST CLEAR', C.gold]); if (winInfo.bestScore) tags.push(['NEW BEST SCORE', '#ff5fb0']); if (winInfo.bestStars) tags.push(['BEST RATING', '#b45cf0']);
+    { let tw = tags.map(([s]) => s.length * 9 + 24), tot = tw.reduce((a, b) => a + b + 8, -8), x = cx - tot / 2; tags.forEach(([s, col], i) => { const a = ease((winT - .3 - i * .12) / .3); ctx.globalAlpha *= a; ctx.fillStyle = col; rr(x, cy0 + 94 + (1 - a) * 8, tw[i], 24, 12); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt(s, x + tw[i] / 2, cy0 + 107 + (1 - a) * 8, 13, '#fff', null); x += tw[i] + 8; ctx.globalAlpha = clamp(winT * 2, 0, 1); }); }
+    for (let i = 0; i < 3; i++) {   // the rhythm rating: one heart per star, popping in one after another as the bells ring
+      const earned = i < winStars, s = earned ? Math.max(.001, back((winT - .5 - i * .22) / .3)) : 1;
+      ctx.save(); ctx.translate(cx - 70 + i * 70, cy0 + 168); ctx.scale(s, s); ctx.fillStyle = earned ? C.hot : 'rgba(200,160,220,.4)'; heartPath(0, 0, 27); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore();
+    }
+    const tacc = judgeN ? Math.round(judgeBase / judgeN) : 100, cu = ease((winT - .35) / .9);   // numbers count up
+    [['HEARTS', Math.round(got * cu) + '/' + hearts.length], ['SCORE', String(Math.round(scoreNow * cu))], ['TIMING', Math.round(tacc * cu) + '%']].forEach(([lab, val], i) => {
+      const x = cx - 224 + i * 154; ctx.fillStyle = 'rgba(255,238,248,.95)'; rr(x, cy0 + 214, 140, 76, 18); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.blush; ctx.stroke();
+      txt(lab, x + 70, cy0 + 236, 13, C.mauve, null); txt(val, x + 70, cy0 + 266, 30, C.pink, null);
+    });
+    { const gr = [['Perfect', judged.PERFECT, 'PERFECT'], ['Great', judged.GREAT, 'GREAT'], ['Good', judged.GOOD, 'GOOD'], ['Ok', judged.OK, 'OK']];   // timing breakdown, in the colours the jump judge uses in the run
+      gr.forEach(([nm, n, k], i) => { const x = cx - 220 + i * 111; ctx.fillStyle = GRADES[k][1]; ctx.beginPath(); ctx.arc(x + 8, cy0 + 314, 7, 0, 7); ctx.fill(); txt(nm + ' ' + n, x + 20, cy0 + 315, 15, C.plum, null, 'left'); }); }
+    if (!winInfo.saved && mode === 'dash' && !testing) txt('Chill pace: score and hearts are not saved', cx, cy0 + 338, 13, C.mauve, null);
+    ctx.restore();
+    if (winT > 1.2) { ctx.globalAlpha = .6 + .4 * Math.sin(tg * 4); txt(testing ? 'tap to return to the editor' : 'tap to continue', cx, cy0 + ch + 24, 22, '#fff', C.plum); }
     ctx.globalAlpha = 1;
   }
   if (toast.life > 0 && roomPanel !== 'goals') {   // (not over the goals card: its first row sits where toasts do)

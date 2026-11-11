@@ -161,10 +161,14 @@ function winJingle() {
   if (!(winStars === 3 && tuneFanfare(c))) [0, 2, 4, 5, 7, 9].forEach((d, i) => voice(mf(degMidi(c, d)), 1.3, .06, i * .12, 'sfx'));
   for (let i = 0; i < winStars; i++) setTimeout(() => sfx.star(i), 900 + i * 220);
 }
+// what the results card shows about this win: first clear, personal bests (against what was saved before this run), and what it unlocked
+let winInfo = { first: false, bestScore: false, bestStars: false, saved: false, unlocked: [], prevScore: 0 };
 function win() {
   if (simming) { state = 'win'; return; }
   state = 'win'; winT = 0; setHum(0); humOn = 0; songStop(); ambStop();
   const acc = judgeN ? judgeBase / (100 * judgeN) : 1; winStars = acc >= .8 ? 3 : acc >= .6 ? 2 : 1;   // rhythm rating from timing accuracy
+  { const id = curLevel.id, scored = !testing && mode === 'dash' && (store.pace || 1) >= 1, ps = store.score[id] || 0;
+    winInfo = { first: !testing && mode === 'dash' && (store.best[id] || 0) < 100, bestScore: scored && ps > 0 && scoreNow > ps, bestStars: scored && winStars > (store.rate[id] || 0) && (store.rate[id] || 0) > 0, saved: scored, unlocked: [], prevScore: ps }; }
   winJingle();
   if (!testing && mode === 'dash') {
     const before = doneCount();
@@ -175,6 +179,7 @@ function win() {
     }
     persist();
     const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];
+    winInfo.unlocked = fresh;
     if (fresh.length) setTimeout(() => { sfx.unlock(); say('Unlocked: ' + fresh.join(', '), 4.5); }, 1500);
   }
 }
