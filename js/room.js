@@ -226,7 +226,7 @@ function drawPet(p, x, y, sc = 1, t = tg, o = {}) {
 /* ---------- the pet in the room ----------
    It wanders (in little hops, often toward the jelly), looks at the jelly, jumps when you squish or hop it nearby, cheers when you tap it, and curls up asleep when nothing
    has happened for a while. PA is only its position and mood; nothing here is saved. */
-const PA = { x: 330, tx: 330, face: 1, walk: 0, yo: 0, vy: 0, mode: 'idle', t: 2, cheer: 0, look: 0, asleep: false, hopSnd: 0, react: 0, still: 0 };
+const PA = { x: 330, tx: 330, face: 1, walk: 0, yo: 0, vy: 0, mode: 'idle', t: 2, cheer: 0, look: 0, asleep: false, hopSnd: 0, react: 0, still: 0, fingerOn: false, fx: 480, play: false, nudgeT: 0 };   // fingerOn/fx: a finger is down on the room at x = fx (the pet runs over to it); play/nudgeT: it is going to bump the jelly
 const petScale = () => .95 * (.78 + petStage(store.pet.love) * .1);
 function petJump(v = 300) { if (PA.yo < 4) PA.vy = v; PA.asleep = false; PA.still = 0; }
 function petHearts(n = 3) { if (simming) return; for (let i = 0; i < n; i++) spawn({ x: PA.x + (Math.random() - .5) * 26, y: RM.b - 60 * petScale() * 1.5, vx: (Math.random() - .5) * 70, vy: -70 - Math.random() * 60, g: 60, type: 'heart', size: 5 + Math.random() * 3, life: .9, max: .9, col: '#ff7ab8' }); }
@@ -248,16 +248,23 @@ function petStep(dt) {
   if (room.impact > 520 && near) petReact('thump');
   if (PA.asleep) { if (PA.still < 2 || PA.cheer > 0) { PA.asleep = false; PA.mode = 'idle'; PA.t = 1.2; } return; }
   if (PA.still > 16 && PA.mode !== 'walk' && !PA.cheer) { PA.asleep = true; return; }
+  // the bump: a hop toward the jelly, and a small push when it lands against it
+  if (PA.nudgeT > 0) { PA.nudgeT -= dt; if (PA.nudgeT <= 0 && !room.grabs.length && Math.abs(jx - PA.x) < 200) { const d = Math.sign(jx - PA.x) || 1; room.push(d * 260, -170); room.kick(170, 80); sfx.petHop(); sfx.squish(380, roomPreset); PA.cheer = .9; petHearts(2); } return; }
+  if (PA.fingerOn) {   // it runs to wherever a finger is held, and stops a little short of it
+    const dx = PA.fx - PA.x; PA.look = clamp(dx / 220, -1, 1);
+    if (Math.abs(dx) > 90) { PA.tx = clamp(PA.fx - Math.sign(dx) * 60, RM.l + 50, RM.r - 50); PA.mode = 'walk'; PA.play = false; } else { PA.mode = 'idle'; PA.face = dx > 0 ? 1 : -1; PA.t = 1; }
+  }
   if (PA.mode === 'walk') {
-    const dx = PA.tx - PA.x, sp = 70 + 8 * petStage(store.pet.love);
-    if (Math.abs(dx) < 4) { PA.mode = 'idle'; PA.t = 2 + Math.random() * 4; PA.walk = 0; }
+    const dx = PA.tx - PA.x, sp = (70 + 8 * petStage(store.pet.love)) * (PA.fingerOn ? 1.6 : 1);
+    if (Math.abs(dx) < 4) { PA.mode = 'idle'; PA.t = 2 + Math.random() * 4; PA.walk = 0; if (PA.play) { PA.play = false; PA.face = Math.sign(jx - PA.x) || 1; petJump(280); PA.nudgeT = .2; } }
     else { PA.x += Math.sign(dx) * Math.min(Math.abs(dx), sp * dt); PA.face = dx > 0 ? 1 : -1; PA.walk += dt * 7; if (PA.yo < 1) { const h = Math.abs(Math.sin(PA.walk)) * 9; PA.yo = Math.max(PA.yo, 0); PA.walkHop = h; } if (Math.sin(PA.walk) < 0 && Math.sin(PA.walk - dt * 7) >= 0 && tg - PA.hopSnd > .6) { PA.hopSnd = tg; sfx.petHop(); } }
     return;
   }
-  PA.walkHop = 0; PA.t -= dt;
+  PA.walkHop = 0; if (PA.fingerOn) return; PA.t -= dt;
   if (PA.t <= 0) {
     PA.t = 2.5 + Math.random() * 4; const r = Math.random();
-    if (r < .62) { PA.tx = clamp(r < .3 ? jx + (Math.random() - .5) * 260 : RM.l + 70 + Math.random() * (RM.r - RM.l - 140), RM.l + 50, RM.r - 50); if (Math.abs(PA.tx - PA.x) > 40) PA.mode = 'walk'; }
+    if (r < .2 && !room.grabs.length) { const side = PA.x < jx ? -1 : 1; PA.tx = clamp(jx + side * (room.R * 1.15 + 34), RM.l + 50, RM.r - 50); PA.play = true; PA.mode = 'walk'; }   // go and bump the jelly
+    else if (r < .62) { PA.tx = clamp(r < .35 ? jx + (Math.random() - .5) * 260 : RM.l + 70 + Math.random() * (RM.r - RM.l - 140), RM.l + 50, RM.r - 50); if (Math.abs(PA.tx - PA.x) > 40) PA.mode = 'walk'; }
     else if (r < .8) { petJump(240); if (Math.random() < .5) sfx.petHop(); }
     else PA.face = -PA.face;
   }
@@ -316,6 +323,7 @@ function roomPin(mx, my) {
 function roomDown(id, mx, my, button) {
   if (studio && button !== 2) touchNote(mx);
   if (button !== 2 && petHit(mx, my) && !pointInBody(mx, my)) { petReact('pet'); return; }   // a tap on the pet pets it
+  if (!studio) { PA.fingerOn = true; PA.fx = mx; }   // anywhere else, the pet comes to see what you are doing
   const items = [];
   for (let i = 0; i < room.n; i++) items.push({ i, d: Math.hypot(room.x[i] - mx, room.y[i] - my) });
   items.sort((a, b) => a.d - b.d);
@@ -336,11 +344,12 @@ function roomDown(id, mx, my, button) {
   if (!studio) goalDone('pull');
 }
 function roomMove(id, mx, my) {
-  mx = clamp(mx, RM.l, RM.r); my = clamp(my, RM.t, RM.b);
+  mx = clamp(mx, RM.l, RM.r); my = clamp(my, RM.t, RM.b); if (PA.fingerOn) PA.fx = mx;
   for (const g of room.grabs) if (g.id === id) { g.mx = mx; g.my = my; }
   for (const d of room.inds) if (d.id === id) { d.tx = mx; d.ty = my; }
 }
 function roomRelease(id, quiet) {
+  PA.fingerOn = false;
   const had = room.grabs.some(g => !g.pin && (id == null || g.id === id));
   room.grabs = room.grabs.filter(g => g.pin || !(id == null || g.id === id));
   room.inds = room.inds.filter(d => !(id == null || d.id === id));

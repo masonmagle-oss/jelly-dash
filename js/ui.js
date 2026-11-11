@@ -292,6 +292,8 @@ function drawEditor() {
   txt(edLevel.name + (edDirty ? ' *' : ''), 24, 24, 20, C.pink, null, 'left');
   txt(`${edLevel.len} tiles  •  ${edLevel.objs.length} objects`, 24, 43, 13, C.mauve, null, 'left');
   txt(isTouchUi() ? 'drag = place  •  two fingers or Pan = scroll  •  Undo' : 'click/drag = place  •  right-click = erase  •  ← → / wheel = scroll  •  Ctrl+Z undo  •  0-9 tools', W - 14, 24, TS.small, '#fff', C.plum, 'right');
+  { const note = edPowerNote(edLevel), tip = TOOL_TIPS[edTool] || '', h = note ? 50 : 28;   // what the picked tool does (and which powers this level has switched on)
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; rr(10, 58, note ? 560 : 440, h, 14); ctx.fill(); txt(tip, 24, 72, 13, C.plum, null, 'left'); if (note) txt(note, 24, 92, 12, C.mauve, null, 'left'); }
   btn('◀', 6, 230, 34, 54, () => { edScroll = Math.max(0, edScroll - 6); }, { size: 16, r: 12 });
   btn('▶', W - 40, 230, 34, 54, () => { edScroll = Math.min(Math.max(0, edLevel.len - 20), edScroll + 6); }, { size: 16, r: 12 });
   // bottom bar

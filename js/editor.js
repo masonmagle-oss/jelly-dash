@@ -4,7 +4,15 @@
 
 /* ================= level editor ================= */
 const TOOLS = [['block', 'Block'], ['spike', 'Hazard'], ['pad', 'Pad'], ['heart', 'Heart'], ['gap', 'Gap'], ['ship', 'Ship'], ['cube', 'Cube'], ['orb', 'Orb'], ['gate', 'Gate'], ['pan', 'Pan'], ['erase', 'Eraser']];   // keys 1-9 and 0 pick the first ten
-const COLUMN_TOOLS = ['gap', 'ship', 'cube', 'gate'];   // tools that act on a whole column, not one cell
+// a one-line tip for each tool, shown under the top strip while it is picked (drawEditor); edPowerNote adds which powers the level has switched on
+const TOOL_TIPS = {
+  block: 'Block: build floors, steps and walls to hop over.', spike: 'Hazard: touching it restarts. Leave a landing tile after it.', pad: 'Pad: a spring that launches the jelly high.',
+  heart: 'Heart: put them on the path so the level can be cleared 100%.', gap: 'Gap: drag over columns. A wide gap needs Puff (More ▸).', ship: 'Ship: a flying section starts here. Place Cube to end it.',
+  cube: 'Cube: back to hopping after a Ship section.', orb: 'Orb: tap on it for one more jump in mid-air.', gate: 'Gate: hold Squish to slip under. Leave 2+ floor tiles after it.',
+  pan: 'Pan: drag to scroll the level.', erase: 'Eraser: tap an object to remove it.',
+};
+const edPowerNote = L => [L.puff ? 'Puff on: hold Squish in the air to float' : '', L.bounce ? 'Bounce on: tap just before landing to spring higher' : ''].filter(Boolean).join('  •  ');
+const COLUMN_TOOLS =['gap', 'ship', 'cube', 'gate'];   // tools that act on a whole column, not one cell
 let edPreview = false, edLevel = null, edScroll = 0, edTool = 'block', edPaint = null, edDirty = false, selTab = 0, selPage = 0, selWorld = -1, pickFor = 'play', delArm = null;
 const clone = o => JSON.parse(JSON.stringify(o));
 function sanitize(o) {
