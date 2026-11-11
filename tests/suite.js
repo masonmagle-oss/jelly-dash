@@ -391,15 +391,15 @@
       // the catalogue and the drawing
       eq(new Set(DECOR.map(d => d.id)).size, DECOR.length, 'unique ids'); ok(DECOR.every(d => d.cost > 0 && DECOR_SLOTS.some(s => s.id === d.slot)), 'prices and places'); for (const s of DECOR_SLOTS) eq(DECOR.filter(d => d.slot === s.id).length, 3, 'three things for ' + s.name);
       st.wallet = 5000; J.setState('room'); await frames(2); for (const d of DECOR) { st.decor.owned[d.id] = true; st.decor.placed[d.slot] = d.id; if (DECOR.filter(x => x.slot === d.slot)[0] === d || true) { await frames(1); J.draw(); } }
-      roomPanel = 'decor'; await frames(3); J.draw(); const btns = J.getUi().filter(b => /^decor /.test(b.label)); eq(btns.length, DECOR.length, 'the panel has a button for every item');
+      roomPanel = 'decor'; await frames(3); J.draw(); const btns = J.getUi().filter(b => /^decor /.test(b.label)); eq(btns.length, DECOR.filter(d => !DECOR_SLOTS.find(s => s.id === d.slot).exp).length, 'the first page has a button for every item that is not behind an expansion');
       st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.wallet = 100; await frames(2); J.getUi().find(b => b.label === 'decor winsun').fn(); ok(st.decor.owned.winsun && st.wallet === 75, 'a tap in the panel buys it');
       roomPanel = null; J.draw(); const audit = J.auditUi(); ok(!audit.length, 'room buttons stay finger-sized: ' + audit.map(b => b.label).join());
     } finally { [st.wallet, st.hb, st.decor, st.best, st.score, st.rate, st.pace] = JSON.parse(keep); roomPanel = null; J.setMode('dash'); await toTitle(); }
   });
   test('cozy room: item tiers, dyes and the pet (prices, saving, drawing, panels)', async () => {
-    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.decor, st.pet]);
+    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.decor, st.pet, st.room]);
     try {
-      st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.pet = null; st.wallet = 0;
+      st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.pet = null; st.wallet = 0; st.room = { walls: { blush: true }, floors: { candy: true }, size: 0, wall: 'blush', floor: 'candy' };
       // tiers: Basic -> Deluxe -> Golden at 4x and 10x the price; only for things you own
       const it = decorItem('cactus'); eq(upgradeDecor('cactus'), 'none', 'cannot upgrade what you do not own'); st.wallet = it.cost; eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 0);
       eq(upgradeDecor('cactus'), 'short'); st.wallet = it.cost * 4; eq(upgradeDecor('cactus'), 'upgraded'); eq(st.decor.tier.cactus, 1); eq(st.wallet, 0, 'Deluxe costs 4x');
@@ -423,14 +423,43 @@
       st.wallet = 100; eq(petDye(1), 'bought'); eq(st.wallet, 60, 'the pet dye costs double'); eq(petDye(0), 'set'); eq(petDye(9), 'none');
       const back2 = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back2.pet.kind, 'bun'); eq(back2.pet.love, st.pet.love); ok(back2.pet.dyes & 2, 'the pet survives a save');
       // everything draws: all items at every tier and dye, every pet kind at every stage, and the panels
-      st.wallet = 1e5; J.setState('room'); await frames(2);
+      st.wallet = 1e5; st.room.size = 2; decorPage = 0; J.setState('room'); await frames(2);
       for (const d of DECOR) { buyDecor(d.id); for (let t = 0; t < 3; t++) for (const di of [0, 2, 5]) { st.decor.tier[d.id] = t; st.decor.dye[d.id] = di; st.decor.dyes[d.id] = 63; st.decor.placed[d.slot] = d.id; J.draw(); } }
       for (const [k] of PET_KINDS) for (const [, need] of PET_STAGES) { st.pet.kind = k; st.pet.love = need; st.pet.dye = 0; J.draw(); }
       for (const pn of ['decor', 'style', 'pet']) { roomPanel = pn; await frames(2); J.draw(); ok(J.getUi().length > 3, pn + ' panel has buttons'); }
       roomPanel = 'style'; await frames(2); J.draw(); eq(J.getUi().filter(b => b.label === '').length, 6 * 6, 'six dye buttons for each of the six places'); const up = J.getUi().filter(b => /Deluxe|Golden/.test(b.label)); ok(up.length >= 1, 'upgrade buttons');
       st.pet = null; roomPanel = 'pet'; await frames(2); J.draw(); eq(J.getUi().filter(b => b.label === '').length, 3, 'three pets to adopt'); J.getUi().filter(b => b.label === '')[1].fn(); eq(st.pet && st.pet.kind, 'kit', 'a tap adopts it');
       roomPanel = null; J.draw(); const bad = J.auditUi(); ok(!bad.length, 'room buttons still finger-sized: ' + bad.map(b => b.label).join());
-    } finally { [st.wallet, st.decor, st.pet] = JSON.parse(keep); roomPanel = null; J.setMode('dash'); await toTitle(); }
+    } finally { [st.wallet, st.decor, st.pet, st.room] = JSON.parse(keep); roomPanel = null; decorPage = 0; J.setMode('dash'); await toTitle(); }
+  });
+  test('cozy room: wallpapers, floors and expansions (prices, locks, saving, drawing, panel)', async () => {
+    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.decor, st.room]), fresh = () => ({ walls: { blush: true }, floors: { candy: true }, size: 0, wall: 'blush', floor: 'candy' });
+    try {
+      st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.room = fresh(); st.wallet = 0; decorPage = 0;
+      eq(WALLS[0].cost + FLOORS[0].cost, 0, 'the first wallpaper and floor are free'); eq(WALLS.length, 7); eq(FLOORS.length, 7);
+      eq(buyStyle('wall', 'mint'), 'short'); st.wallet = 90; eq(buyStyle('wall', 'mint'), 'bought'); eq(st.wallet, 0); eq(st.room.wall, 'mint', 'a new wallpaper goes straight on');
+      eq(buyStyle('wall', 'blush'), 'set'); eq(buyStyle('wall', 'mint'), 'set', 'one you own is free to switch back to'); eq(st.wallet, 0); eq(buyStyle('floor', 'nope'), 'none');
+      st.wallet = 69; eq(buyStyle('floor', 'wood'), 'short'); st.wallet = 70; eq(buyStyle('floor', 'wood'), 'bought'); eq(st.room.floor, 'wood');
+      // expansions open four more places, one at a time
+      const fh = decorItem('frheart'); st.wallet = 1e4; eq(buyDecor('frheart'), 'locked'); ok(!st.decor.owned.frheart && st.wallet === 1e4, 'a locked place costs nothing');
+      st.wallet = 499; eq(expandRoom(), 'short'); st.wallet = 500; eq(expandRoom(), 'expanded'); eq(st.room.size, 1); eq(st.wallet, 0);
+      st.wallet = 1e4; eq(buyDecor('frheart'), 'bought'); eq(buyDecor('pfpink'), 'bought'); eq(buyDecor('shbooks'), 'locked', 'the shelf needs the second expansion');
+      eq(expandRoom(), 'expanded'); eq(st.wallet, 1e4 - fh.cost - decorItem('pfpink').cost - 1800); eq(expandRoom(), 'max'); eq(buyDecor('shbooks'), 'bought'); eq(buyDecor('nktent'), 'bought');
+      ok(DECOR.every(d => DECOR_SLOTS.some(s => s.id === d.slot)), 'every item has a place'); ok(DECOR_SLOTS.filter(s => s.exp).every(s => EXPANSIONS[s.exp - 1] && DECOR.filter(d => d.slot === s.id).length === 3), 'locked places name a real expansion and hold three things'); eq(DECOR.length, 30);
+      // saving, including a save from before this existed and damaged ones
+      const back = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back.room.size, 2); eq(back.room.wall, 'mint'); eq(back.room.floor, 'wood'); ok(back.room.walls.mint && back.room.floors.wood, 'bought styles survive');
+      const old = J.normalizeStore({}); eq(old.room.wall, 'blush'); eq(old.room.floor, 'candy'); eq(old.room.size, 0, 'an old save starts with the plain room');
+      const junk = J.normalizeStore({ room: { wall: 'aurora', walls: { blush: true }, size: 9, floor: 'x1', floors: { wood: 'yes' } } }); eq(junk.room.wall, 'blush', 'a wallpaper you do not own is not worn'); eq(junk.room.size, 2, 'size is clamped'); eq(junk.room.floor, 'candy'); ok(!junk.room.floors.wood, 'only true counts as owned');
+      // everything draws, and the panels work
+      J.setState('room'); await frames(2);
+      for (const w of WALLS) for (const f of FLOORS) { st.room.wall = w.id; st.room.floor = f.id; J.draw(); }
+      st.room = fresh(); st.wallet = 5000; roomPanel = 'room'; await frames(2); J.draw(); eq(J.getUi().filter(b => /^(wall|floor) /.test(b.label || '')).length, 14, 'seven wallpapers and seven floors to pick');
+      J.getUi().find(b => b.label === 'wall sky').fn(); eq(st.room.wall, 'sky', 'a tap buys and wears it'); eq(st.wallet, 5000 - 320);
+      st.room = fresh(); decorPage = 1; roomPanel = 'decor'; await frames(2); J.draw(); eq(J.getUi().filter(b => /^locked /.test(b.label || '')).length, 4, 'all four extra places show as locked at first');
+      st.room.size = 2; await frames(2); J.draw(); eq(J.getUi().filter(b => /^decor /.test(b.label || '')).length, 12, 'twelve things once everything is open');
+      roomPanel = 'style'; await frames(2); J.draw(); ok(J.getUi().length > 3, 'style panel on the second page');
+      roomPanel = null; decorPage = 0; J.draw(); const bad = J.auditUi(); ok(!bad.length, 'room buttons still finger-sized: ' + bad.map(b => b.label).join());
+    } finally { [st.wallet, st.decor, st.room] = JSON.parse(keep); roomPanel = null; decorPage = 0; J.setMode('dash'); await toTitle(); }
   });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
