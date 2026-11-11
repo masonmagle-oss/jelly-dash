@@ -376,10 +376,10 @@
       st.wallet = 0; st.hb = {}; st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.best = {}; st.score = {}; st.rate = {};
       const win1 = async (hearts, pace = 1) => { st.pace = pace; await J.startLevel(L, 'dash', false); got = hearts; scoreNow = 10; judgeN = 10; judgeBase = 900; win(); return { ...winInfo }; };
       // a flat reward per level (REWARD): 30 for the first clear, 10 per rating heart gained (this run rates 3), 15 once for taking every heart; replays pay only improvements
-      let w = await win1(40); eq(w.earned, REWARD.first + 3 * REWARD.rating, 'first clear and a three-heart rating'); eq(st.wallet, 60); eq(w.parts.length, 2, 'the card can list what it paid for');
-      w = await win1(40); eq(w.earned, 0, 'the same run again earns nothing'); w = await win1(46); eq(w.earned, REWARD.all, 'taking every heart pays once'); eq(st.wallet, 75);
-      w = await win1(46); eq(w.earned, 0, 'and only once'); w = await win1(46, .85); eq(w.earned, 0, 'Chill pace pays nothing'); eq(st.wallet, 75);
-      const cx = J.genLevel('cx', 'cx', 1, [0, 1, 2], 's1', 104, 0, true, .09); cx.custom = true; st.pace = 1; await J.startLevel(cx, 'dash', false); got = 12; win(); eq(st.wallet, 75, 'a level from the editor pays nothing (no farming)');
+      const R = rewardFor(L), base = R.first + 3 * R.rating; let w = await win1(40); eq(w.earned, base, 'first clear and a three-heart rating'); eq(st.wallet, base); eq(w.parts.length, 2, 'the card can list what it paid for');
+      w = await win1(40); eq(w.earned, 0, 'the same run again earns nothing'); w = await win1(46); eq(w.earned, R.all, 'taking every heart pays once'); eq(st.wallet, base + R.all);
+      w = await win1(46); eq(w.earned, 0, 'and only once'); w = await win1(46, .85); eq(w.earned, 0, 'Chill pace pays nothing'); eq(st.wallet, base + R.all);
+      const cx = J.genLevel('cx', 'cx', 1, [0, 1, 2], 's1', 104, 0, true, .09); cx.custom = true; st.pace = 1; await J.startLevel(cx, 'dash', false); got = 12; win(); eq(st.wallet, base + R.all, 'a level from the editor pays nothing (no farming)'); st.wallet = 75;   // (the shop checks below use round numbers)
       eq(buyDecor('nope'), 'none', 'unknown item'); eq(buyDecor('disco'), 'short', 'too expensive'); eq(st.wallet, 75);
       eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 60); eq(st.decor.placed.plant, 'cactus', 'bought and put on');
       eq(buyDecor('fern'), 'bought'); eq(st.wallet, 25); eq(st.decor.placed.plant, 'fern', 'one thing per place: the new one replaces the old');
@@ -480,6 +480,22 @@
       for (const o of [{}, { flip: -1, look: 1 }, { sleep: true }, { happy: true, hop: 12 }]) for (const kind of ['bun', 'kit', 'bear']) { drawPet({ kind, love: 9000, dye: 0 }, 400, 400, 1, tg, o); }
       PA.asleep = true; J.draw(); PA.asleep = false; PA.face = -1; PA.cheer = 1; J.draw();
     } finally { st.pet = JSON.parse(keep); PA.asleep = false; PA.cheer = 0; PA.face = 1; PA.x = 330; PA.tx = 330; PA.mode = 'idle'; J.setMode('dash'); await toTitle(); }
+  });
+  test('heart economy: later levels pay more (capped), the steady extras pay small amounts, nothing pays twice, and the pet cheers on the results card', async () => {
+    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.hb, st.best, st.score, st.rate, st.pace, st.studio, st.goals, st.pet]);
+    try {
+      eq(rewardScale(OFFICIAL[0]), 1, 'the first level pays the base amounts'); ok(rewardScale(OFFICIAL[10]) > rewardScale(OFFICIAL[5]), 'later levels pay more'); eq(rewardScale({}), 1, 'anything else pays the base');
+      const r0 = rewardFor(OFFICIAL[0]), rl = rewardFor(OFFICIAL[OFFICIAL.length - 1]); eq(r0.first, REWARD.first); ok(rl.first > r0.first && rl.rating > r0.rating && rl.all > r0.all, 'the last level pays more on every count');
+      ok(rewardScale({ __x: 1 }) === 1 && 1 + .08 * 30 <= 3.41, 'and the scale tops out at 3.4x');
+      const total = OFFICIAL.reduce((n, L) => { const r = rewardFor(L); return n + r.first + 3 * r.rating + r.all; }, 0); ok(total > 2500 && total < 4500, 'clearing every official level perfectly pays about three thousand hearts, got ' + total);
+      st.wallet = 0; st.hb = {}; st.best = {}; st.score = {}; st.rate = {}; st.pace = 1; st.pet = null;
+      const L = OFFICIAL[10], r = rewardFor(L); await J.startLevel(L, 'dash', false); got = hearts.length; scoreNow = 10; judgeN = 10; judgeBase = 900; win();
+      eq(st.wallet, r.first + 3 * r.rating + r.all, 'level eleven pays its scaled first clear, rating and every-heart'); const w1 = st.wallet; win(); eq(st.wallet, w1, 'the same win again pays nothing');
+      st.pet = { kind: 'bun', name: 'Mochi', love: 600, dyes: 1, dye: 0, day: '' }; for (const k of [1, 2, 3]) { winStars = k; winT = 1.6; J.draw(); } winStars = 3; winT = .2; J.draw();   // the pet cheers beside the card at every rating
+      const d = J.genLevel('daily-x', 'daily-x', 1, [0, 1, 2], 's1', 104, 0, true, .09); d.id = 'daily-2099-01-01'; st.best = {}; st.wallet = 0; await J.startLevel(d, 'dash', false); win(); eq(st.wallet, REWARD.daily, 'the daily level pays once'); await J.startLevel(d, 'dash', false); win(); eq(st.wallet, REWARD.daily, 'and not again');
+      st.studio = { stars: {} }; st.wallet = 0; startStudio(); studioShape = 0; studioSimAvg = .95; completeShape(); eq(st.wallet, 3 * REWARD.studio, 'a three-star shape pays for each star'); studioSimAvg = .95; completeShape(); eq(st.wallet, 3 * REWARD.studio, 'and not twice');
+      st.goals = null; st.wallet = 0; cozyTick(61, '2030-01-01'); eq(st.wallet, REWARD.cozy, 'a cozy day pays'); cozyTick(61, '2030-01-02'); eq(st.wallet, 2 * REWARD.cozy + 5, 'and a little more for a streak'); cozyTick(61, '2030-01-02'); eq(st.wallet, 2 * REWARD.cozy + 5, 'once a day');
+    } finally { [st.wallet, st.hb, st.best, st.score, st.rate, st.pace, st.studio, st.goals, st.pet] = JSON.parse(keep); J.setMode('dash'); await toTitle(); }
   });
   test('editor tips: every tool explains itself and the level says which powers are on', async () => {
     for (const [id, label] of TOOLS) ok(TOOL_TIPS[id] && TOOL_TIPS[id].length > 10 && TOOL_TIPS[id].length < 70, label + ' has a short tip');
