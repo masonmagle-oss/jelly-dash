@@ -373,27 +373,64 @@
   test('cozy room: official wins fill the heart wallet (no farming), decor is bought, placed, saved, and everything draws', async () => {
     const st = J.getStore(), keep = JSON.stringify([st.wallet, st.hb, st.decor, st.best, st.score, st.rate, st.pace]), L = level('First Hop');
     try {
-      st.wallet = 0; st.hb = {}; st.decor = { owned: {}, placed: {} }; st.best = {}; st.score = {}; st.rate = {};
+      st.wallet = 0; st.hb = {}; st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.best = {}; st.score = {}; st.rate = {};
       const win1 = async (hearts, pace = 1) => { st.pace = pace; await J.startLevel(L, 'dash', false); got = hearts; scoreNow = 10; judgeN = 10; judgeBase = 900; win(); return { ...winInfo }; };
-      let w = await win1(40); eq(w.earned, 50, '40 hearts and 10 for the first clear'); eq(st.wallet, 50);
-      w = await win1(40); eq(w.earned, 0, 'the same hearts again earn nothing'); w = await win1(46); eq(w.earned, 6, 'only the new ones'); eq(st.wallet, 56);
-      w = await win1(46, .85); eq(w.earned, 0, 'Chill pace pays nothing'); eq(st.wallet, 56);
-      const cx = J.genLevel('cx', 'cx', 1, [0, 1, 2], 's1', 104, 0, true, .09); cx.custom = true; st.pace = 1; await J.startLevel(cx, 'dash', false); got = 12; win(); eq(st.wallet, 56, 'a level from the editor pays nothing (no farming)');
-      eq(buyDecor('nope'), 'none', 'unknown item'); eq(buyDecor('disco'), 'short', 'too expensive'); eq(st.wallet, 56);
-      eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 41); eq(st.decor.placed.plant, 'cactus', 'bought and put on');
-      eq(buyDecor('fern'), 'bought'); eq(st.wallet, 6); eq(st.decor.placed.plant, 'fern', 'one thing per place: the new one replaces the old');
-      eq(buyDecor('cactus'), 'placed', 'an owned one is free to put back'); eq(st.wallet, 6); eq(buyDecor('cactus'), 'removed'); ok(!st.decor.placed.plant, 'and to take off');
+      // a flat reward per level (REWARD): 30 for the first clear, 10 per rating heart gained (this run rates 3), 15 once for taking every heart; replays pay only improvements
+      let w = await win1(40); eq(w.earned, REWARD.first + 3 * REWARD.rating, 'first clear and a three-heart rating'); eq(st.wallet, 60); eq(w.parts.length, 2, 'the card can list what it paid for');
+      w = await win1(40); eq(w.earned, 0, 'the same run again earns nothing'); w = await win1(46); eq(w.earned, REWARD.all, 'taking every heart pays once'); eq(st.wallet, 75);
+      w = await win1(46); eq(w.earned, 0, 'and only once'); w = await win1(46, .85); eq(w.earned, 0, 'Chill pace pays nothing'); eq(st.wallet, 75);
+      const cx = J.genLevel('cx', 'cx', 1, [0, 1, 2], 's1', 104, 0, true, .09); cx.custom = true; st.pace = 1; await J.startLevel(cx, 'dash', false); got = 12; win(); eq(st.wallet, 75, 'a level from the editor pays nothing (no farming)');
+      eq(buyDecor('nope'), 'none', 'unknown item'); eq(buyDecor('disco'), 'short', 'too expensive'); eq(st.wallet, 75);
+      eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 60); eq(st.decor.placed.plant, 'cactus', 'bought and put on');
+      eq(buyDecor('fern'), 'bought'); eq(st.wallet, 25); eq(st.decor.placed.plant, 'fern', 'one thing per place: the new one replaces the old');
+      eq(buyDecor('cactus'), 'placed', 'an owned one is free to put back'); eq(st.wallet, 25); eq(buyDecor('cactus'), 'removed'); ok(!st.decor.placed.plant, 'and to take off');
       // saved data: round trip, and damaged data cannot place what you do not own
-      const back = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back.wallet, 6); ok(back.decor.owned.cactus && back.decor.owned.fern, 'owned items survive'); eq(back.hb[L.id], 46, 'and the best hearts per level');
+      const back = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back.wallet, 25); ok(back.decor.owned.cactus && back.decor.owned.fern, 'owned items survive'); eq(back.hb[L.id], 46, 'and the best hearts per level');
       const bad = J.normalizeStore({ wallet: -5, hb: { a: 'x', b: 7 }, decor: { owned: { cactus: true, 'Bad id!': true, fern: 'yes' }, placed: { plant: 'fern', window: 'winsun', 'x y': 'cactus' } } });
       eq(bad.wallet, 0, 'no negative hearts'); eq(bad.hb.a, 0); eq(bad.hb.b, 7); eq(Object.keys(bad.decor.owned).join(), 'cactus', 'only well-formed owned ids'); eq(Object.keys(bad.decor.placed).length, 0, 'nothing placed that is not owned');
       // the catalogue and the drawing
       eq(new Set(DECOR.map(d => d.id)).size, DECOR.length, 'unique ids'); ok(DECOR.every(d => d.cost > 0 && DECOR_SLOTS.some(s => s.id === d.slot)), 'prices and places'); for (const s of DECOR_SLOTS) eq(DECOR.filter(d => d.slot === s.id).length, 3, 'three things for ' + s.name);
       st.wallet = 5000; J.setState('room'); await frames(2); for (const d of DECOR) { st.decor.owned[d.id] = true; st.decor.placed[d.slot] = d.id; if (DECOR.filter(x => x.slot === d.slot)[0] === d || true) { await frames(1); J.draw(); } }
       roomPanel = 'decor'; await frames(3); J.draw(); const btns = J.getUi().filter(b => /^decor /.test(b.label)); eq(btns.length, DECOR.length, 'the panel has a button for every item');
-      st.decor = { owned: {}, placed: {} }; st.wallet = 100; await frames(2); J.getUi().find(b => b.label === 'decor winsun').fn(); ok(st.decor.owned.winsun && st.wallet === 75, 'a tap in the panel buys it');
+      st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.wallet = 100; await frames(2); J.getUi().find(b => b.label === 'decor winsun').fn(); ok(st.decor.owned.winsun && st.wallet === 75, 'a tap in the panel buys it');
       roomPanel = null; J.draw(); const audit = J.auditUi(); ok(!audit.length, 'room buttons stay finger-sized: ' + audit.map(b => b.label).join());
     } finally { [st.wallet, st.hb, st.decor, st.best, st.score, st.rate, st.pace] = JSON.parse(keep); roomPanel = null; J.setMode('dash'); await toTitle(); }
+  });
+  test('cozy room: item tiers, dyes and the pet (prices, saving, drawing, panels)', async () => {
+    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.decor, st.pet]);
+    try {
+      st.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; st.pet = null; st.wallet = 0;
+      // tiers: Basic -> Deluxe -> Golden at 4x and 10x the price; only for things you own
+      const it = decorItem('cactus'); eq(upgradeDecor('cactus'), 'none', 'cannot upgrade what you do not own'); st.wallet = it.cost; eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 0);
+      eq(upgradeDecor('cactus'), 'short'); st.wallet = it.cost * 4; eq(upgradeDecor('cactus'), 'upgraded'); eq(st.decor.tier.cactus, 1); eq(st.wallet, 0, 'Deluxe costs 4x');
+      st.wallet = it.cost * 10 - 1; eq(upgradeDecor('cactus'), 'short', 'one heart short of Golden'); st.wallet = it.cost * 10; eq(upgradeDecor('cactus'), 'upgraded'); eq(st.decor.tier.cactus, 2); eq(st.wallet, 0, 'Golden costs 10x'); eq(upgradeDecor('cactus'), 'max');
+      // dyes: 20 hearts each (150 for Rainbow), bought once per item, then free to switch
+      st.wallet = 19; eq(dyeDecor('cactus', 1), 'short'); st.wallet = 20; eq(dyeDecor('cactus', 1), 'bought'); eq(st.wallet, 0); eq(st.decor.dye.cactus, 1); eq(dyeDecor('cactus', 0), 'set', 'back to the original is free'); eq(dyeDecor('cactus', 1), 'set', 'and so is a dye you already bought'); eq(st.wallet, 0);
+      st.wallet = 149; eq(dyeDecor('cactus', 5), 'short', 'Rainbow is 150'); eq(dyeDecor('cactus', 9), 'none', 'no such dye'); eq(dyeDecor('fern', 1), 'none', 'not owned');
+      // the hue shift: colours move, greys and whites do not, and a painter run leaves the canvas as it found it
+      ok(dyeColor('#ff9ccf', 150) !== '#ff9ccf' && /^#[0-9a-f]{6}$/.test(dyeColor('#ff9ccf', 150)), 'a pink moves'); eq(dyeColor('#ffffff', 150), '#ffffff', 'white stays'); eq(dyeColor('#808080', 150), '#808080', 'grey stays'); eq(dyeColor('rgba(1,2,3,.5)', 150), 'rgba(1,2,3,.5)', 'non-hex colours pass through'); eq(dyeColor('#ff9ccf', 0), '#ff9ccf');
+      const owns = o => Object.prototype.hasOwnProperty.call(ctx, o); withDye(150, () => { ctx.fillStyle = '#ff9ccf'; ok(ctx.fillStyle !== '#ff9ccf', 'inside withDye the colour is shifted'); }); ok(!owns('fillStyle') && !owns('strokeStyle'), 'afterwards the canvas has its normal colour setters again');
+      try { withDye(150, () => { throw new Error('x'); }); } catch (e) {} ok(!owns('fillStyle'), 'even when a painter throws');
+      // saved data
+      const back = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back.decor.tier.cactus, 2); eq(back.decor.dye.cactus, 1); ok(back.decor.dyes.cactus & 2 && back.decor.dyes.cactus & 1, 'tier, dye and bought dyes survive');
+      const junk = J.normalizeStore({ decor: { owned: { cactus: true }, tier: { cactus: 9 }, dye: { cactus: 4 }, dyes: { cactus: 1 } }, pet: { kind: 'dragon', love: 5 } }); eq(junk.decor.tier.cactus, 2, 'tier is clamped'); eq(junk.decor.dye.cactus, 0, 'a dye you have not bought is not worn'); eq(junk.pet, null, 'an unknown kind of pet is not a pet');
+      // the pet: free adoption, stages by love, food prices, one gift a day
+      eq(petAdopt('dragon'), false); ok(petAdopt('bun') && st.pet.kind === 'bun' && st.pet.love === 0, 'adopted'); eq(petAdopt('kit'), false, 'one pet');
+      eq(PET_STAGES.length, 6, 'six stages'); eq(petStage(0), 0); eq(petStage(119), 0); eq(petStage(120), 1); eq(petStage(9000), 5); eq(petStage(1e6), 5);
+      st.wallet = 5; eq(petFeed('snack'), 'short'); st.wallet = 6; eq(petFeed('snack'), 'fed'); eq(st.pet.love, 12); eq(st.wallet, 0); eq(petFeed('pizza'), 'none');
+      st.wallet = 120; eq(petFeed('feast'), 'grew', 'a feast is enough to grow a baby'); eq(st.pet.love, 302, 'and gives more love per heart than a snack'); st.wallet = 30; st.pet.love = 100; eq(petFeed('treat'), 'grew', 'reaching a new stage says so'); eq(petStage(st.pet.love), 1);
+      st.pet.day = ''; st.wallet = 0; eq(petGift('2026-11-11'), petGiftAmount(st.pet)); eq(st.wallet, 3 + 3 * 1, 'the gift grows with the pet'); eq(petGift('2026-11-11'), 0, 'one gift a day'); ok(petGift('2026-11-12') > 0, 'and another tomorrow');
+      st.wallet = 100; eq(petDye(1), 'bought'); eq(st.wallet, 60, 'the pet dye costs double'); eq(petDye(0), 'set'); eq(petDye(9), 'none');
+      const back2 = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back2.pet.kind, 'bun'); eq(back2.pet.love, st.pet.love); ok(back2.pet.dyes & 2, 'the pet survives a save');
+      // everything draws: all items at every tier and dye, every pet kind at every stage, and the panels
+      st.wallet = 1e5; J.setState('room'); await frames(2);
+      for (const d of DECOR) { buyDecor(d.id); for (let t = 0; t < 3; t++) for (const di of [0, 2, 5]) { st.decor.tier[d.id] = t; st.decor.dye[d.id] = di; st.decor.dyes[d.id] = 63; st.decor.placed[d.slot] = d.id; J.draw(); } }
+      for (const [k] of PET_KINDS) for (const [, need] of PET_STAGES) { st.pet.kind = k; st.pet.love = need; st.pet.dye = 0; J.draw(); }
+      for (const pn of ['decor', 'style', 'pet']) { roomPanel = pn; await frames(2); J.draw(); ok(J.getUi().length > 3, pn + ' panel has buttons'); }
+      roomPanel = 'style'; await frames(2); J.draw(); eq(J.getUi().filter(b => b.label === '').length, 6 * 6, 'six dye buttons for each of the six places'); const up = J.getUi().filter(b => /Deluxe|Golden/.test(b.label)); ok(up.length >= 1, 'upgrade buttons');
+      st.pet = null; roomPanel = 'pet'; await frames(2); J.draw(); eq(J.getUi().filter(b => b.label === '').length, 3, 'three pets to adopt'); J.getUi().filter(b => b.label === '')[1].fn(); eq(st.pet && st.pet.kind, 'kit', 'a tap adopts it');
+      roomPanel = null; J.draw(); const bad = J.auditUi(); ok(!bad.length, 'room buttons still finger-sized: ' + bad.map(b => b.label).join());
+    } finally { [st.wallet, st.decor, st.pet] = JSON.parse(keep); roomPanel = null; J.setMode('dash'); await toTitle(); }
   });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
