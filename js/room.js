@@ -198,9 +198,10 @@ function petDye(idx) {
   p.dye = idx; persist(); return 'set';
 }
 // draws a pet with its feet at (x, y): scale grows with its stage; `t` drives the bobbing and blinking
-function drawPet(p, x, y, sc = 1, t = tg) {
-  const st = petStage(p.love), s = sc * (.78 + st * .1), hop = Math.max(0, Math.sin(t * 2.2)) * 6 * s;
-  ctx.save(); ctx.translate(x, y - hop); ctx.scale(s, s * (1 + .04 * Math.sin(t * 4.4)));
+// o (the pet living in the room, see PA): flip (+1 / -1 facing), hop (height above the floor), look (-1..1, where its eyes point), sleep, happy
+function drawPet(p, x, y, sc = 1, t = tg, o = {}) {
+  const st = petStage(p.love), s = sc * (.78 + st * .1), hop = o.hop != null ? o.hop : Math.max(0, Math.sin(t * 2.2)) * 6 * s, fl = o.flip || 1, lk = (o.look || 0) * 2.2 * fl;
+  ctx.save(); ctx.translate(x, y - hop); ctx.scale(s * fl, s * (1 + (o.sleep ? .02 : .04) * Math.sin(t * (o.sleep ? 1.6 : 4.4))));
   withDye(dyeHue(p.dye | 0), () => {
     const body = '#ffc4de', dark = '#ff9ccf';
     if (st >= 4) { ctx.globalAlpha = .2 + .08 * Math.sin(t * 2); ctx.fillStyle = '#ffe566'; dcirc(0, -34, 46); ctx.fill(); ctx.globalAlpha = 1; }
@@ -210,8 +211,10 @@ function drawPet(p, x, y, sc = 1, t = tg) {
     if (p.kind === 'bun') for (const sg of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sg * 10, -66, 7, 17, sg * .15, 0, 7); dfill(body, '#fff', 3); ctx.fillStyle = '#ffb3d6'; ctx.beginPath(); ctx.ellipse(sg * 10, -64, 3, 11, sg * .15, 0, 7); ctx.fill(); }
     else if (p.kind === 'kit') for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sg * 20, -50); ctx.lineTo(sg * 18, -70); ctx.lineTo(sg * 5, -57); dfill(body, '#fff', 3); }
     else for (const sg of [-1, 1]) { dcirc(sg * 17, -58, 8); dfill(body, '#fff', 3); }
-    dcirc(0, -40, 18); dfill(body, '#fff', 3); ctx.fillStyle = C.ink; const blink = Math.sin(t * 1.3) > .97 ? .5 : 3; ctx.beginPath(); ctx.ellipse(-6.5, -41, 2.6, blink, 0, 0, 7); ctx.ellipse(6.5, -41, 2.6, blink, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,120,170,.6)'; dcirc(-12, -36, 3.6); ctx.fill(); dcirc(12, -36, 3.6); ctx.fill(); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(0, -36, 3, .2 * Math.PI, .8 * Math.PI); ctx.lineWidth = 1.6; ctx.strokeStyle = C.ink; ctx.stroke();
+    dcirc(0, -40, 18); dfill(body, '#fff', 3); ctx.fillStyle = C.ink; const blink = o.sleep ? .5 : o.happy ? 1.3 : Math.sin(t * 1.3) > .97 ? .5 : 3; ctx.beginPath(); ctx.ellipse(-6.5 + lk, -41, 2.6, blink, 0, 0, 7); ctx.ellipse(6.5 + lk, -41, 2.6, blink, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,120,170,.6)'; dcirc(-12, -36, 3.6); ctx.fill(); dcirc(12, -36, 3.6); ctx.fill(); ctx.fillStyle = C.ink;
+    if (o.happy) { ctx.beginPath(); ctx.arc(0, -36, 4, 0, Math.PI); ctx.fillStyle = '#b03a5a'; ctx.fill(); }   // a happy open mouth
+    else { ctx.beginPath(); ctx.arc(0, -36, 3, .2 * Math.PI, .8 * Math.PI); ctx.lineWidth = 1.6; ctx.strokeStyle = C.ink; ctx.stroke(); }
     if (st >= 1) { ctx.fillStyle = '#ff5fb0'; ctx.beginPath(); ctx.moveTo(10, -54); ctx.lineTo(24, -62); ctx.lineTo(24, -46); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, -54); ctx.lineTo(-4, -62); ctx.lineTo(-4, -46); ctx.fill(); dcirc(10, -54, 4); ctx.fill(); }   // bow
     if (st >= 2) { ctx.fillStyle = '#c9a8ff'; rr(-17, -27, 34, 8, 4); ctx.fill(); rr(8, -26, 8, 16, 3); ctx.fill(); }   // scarf
     if (st >= 3) { ctx.fillStyle = '#ffd75e'; ctx.beginPath(); ctx.moveTo(-14, -56); ctx.lineTo(-14, -70); ctx.lineTo(-7, -62); ctx.lineTo(0, -74); ctx.lineTo(7, -62); ctx.lineTo(14, -70); ctx.lineTo(14, -56); ctx.closePath(); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }   // crown
@@ -220,10 +223,51 @@ function drawPet(p, x, y, sc = 1, t = tg) {
   ctx.restore();
 }
 
+/* ---------- the pet in the room ----------
+   It wanders (in little hops, often toward the jelly), looks at the jelly, jumps when you squish or hop it nearby, cheers when you tap it, and curls up asleep when nothing
+   has happened for a while. PA is only its position and mood; nothing here is saved. */
+const PA = { x: 330, tx: 330, face: 1, walk: 0, yo: 0, vy: 0, mode: 'idle', t: 2, cheer: 0, look: 0, asleep: false, hopSnd: 0, react: 0, still: 0 };
+const petScale = () => .95 * (.78 + petStage(store.pet.love) * .1);
+function petJump(v = 300) { if (PA.yo < 4) PA.vy = v; PA.asleep = false; PA.still = 0; }
+function petHearts(n = 3) { if (simming) return; for (let i = 0; i < n; i++) spawn({ x: PA.x + (Math.random() - .5) * 26, y: RM.b - 60 * petScale() * 1.5, vx: (Math.random() - .5) * 70, vy: -70 - Math.random() * 60, g: 60, type: 'heart', size: 5 + Math.random() * 3, life: .9, max: .9, col: '#ff7ab8' }); }
+function petReact(kind) {   // 'hop' (the jelly hopped), 'thump' (it landed hard nearby), 'pet' (a tap)
+  if (!store.pet || studio || tg - PA.react < .5) return; PA.react = tg;
+  if (kind === 'pet') { PA.cheer = 1.4; petJump(330); sfx.petHappy(); petHearts(4); buzz(8); PA.mode = 'idle'; PA.t = 2; return; }
+  if (kind === 'hop') { PA.cheer = .9; petJump(260); sfx.petHop(); return; }
+  PA.cheer = .5; petJump(200); sfx.petHop();
+}
+function petHit(mx, my) { if (!store.pet || studio) return false; const s = petScale(); return Math.abs(mx - PA.x) < 34 * s * 1.2 && my > RM.b - 100 * s - PA.yo && my < RM.b + 8; }
+function petStep(dt) {
+  if (!store.pet || studio) return;
+  const bb = room.bounds(), jx = (bb.minx + bb.maxx) / 2, near = Math.abs(jx - PA.x) < 190;
+  PA.look = clamp((jx - PA.x) / 220, -1, 1); PA.cheer = Math.max(0, PA.cheer - dt);
+  // hop physics (vertical)
+  if (PA.yo > 0 || PA.vy > 0) { PA.vy -= 1500 * dt; PA.yo += PA.vy * dt; if (PA.yo <= 0) { PA.yo = 0; PA.vy = 0; } }
+  const busy = room.grabs.length || room.inds.length || room.deform > 80;
+  PA.still = busy ? 0 : PA.still + dt;
+  if (room.impact > 520 && near) petReact('thump');
+  if (PA.asleep) { if (PA.still < 2 || PA.cheer > 0) { PA.asleep = false; PA.mode = 'idle'; PA.t = 1.2; } return; }
+  if (PA.still > 16 && PA.mode !== 'walk' && !PA.cheer) { PA.asleep = true; return; }
+  if (PA.mode === 'walk') {
+    const dx = PA.tx - PA.x, sp = 70 + 8 * petStage(store.pet.love);
+    if (Math.abs(dx) < 4) { PA.mode = 'idle'; PA.t = 2 + Math.random() * 4; PA.walk = 0; }
+    else { PA.x += Math.sign(dx) * Math.min(Math.abs(dx), sp * dt); PA.face = dx > 0 ? 1 : -1; PA.walk += dt * 7; if (PA.yo < 1) { const h = Math.abs(Math.sin(PA.walk)) * 9; PA.yo = Math.max(PA.yo, 0); PA.walkHop = h; } if (Math.sin(PA.walk) < 0 && Math.sin(PA.walk - dt * 7) >= 0 && tg - PA.hopSnd > .6) { PA.hopSnd = tg; sfx.petHop(); } }
+    return;
+  }
+  PA.walkHop = 0; PA.t -= dt;
+  if (PA.t <= 0) {
+    PA.t = 2.5 + Math.random() * 4; const r = Math.random();
+    if (r < .62) { PA.tx = clamp(r < .3 ? jx + (Math.random() - .5) * 260 : RM.l + 70 + Math.random() * (RM.r - RM.l - 140), RM.l + 50, RM.r - 50); if (Math.abs(PA.tx - PA.x) > 40) PA.mode = 'walk'; }
+    else if (r < .8) { petJump(240); if (Math.random() < .5) sfx.petHop(); }
+    else PA.face = -PA.face;
+  }
+}
+const petHopY = () => PA.yo + (PA.mode === 'walk' ? (PA.walkHop || 0) : 0);
+
 /* ---------- squish room ---------- */
 let lastPress = 0;
 function roomStep(dt) {
-  roomHopT -= dt;
+  roomHopT -= dt; petStep(dt);
   for (const d of room.inds) {   // a fingertip glides from the skin toward the pointer; its round pad sits outside the body along that ray
     const dist = Math.hypot(d.tx - d.x, d.ty - d.y), k = dist > 1e-3 ? Math.min(1, 900 * dt / dist) : 1;
     d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k;
@@ -249,7 +293,7 @@ function roomStep(dt) {
   if (!studio) goalsStep(dt, el);
 }
 function roomHop() {
-  if (roomHopT > 0) return; roomHopT = .18; room.push(0, -760); room.kick(380, 160); sfx.jump();
+  if (roomHopT > 0) return; roomHopT = .18; room.push(0, -760); room.kick(380, 160); sfx.jump(); if (Math.abs(room.bounds().cx - PA.x) < 260) petReact('hop');
   if (!studio && ++goalStore().hops >= 10) goalDone('hop');
 }
 function pointInBody(mx, my) {
@@ -271,6 +315,7 @@ function roomPin(mx, my) {
 // press in the middle = a finger that dents it; press near the skin = grab and pull; right-click = pin a spot so you can stretch strings
 function roomDown(id, mx, my, button) {
   if (studio && button !== 2) touchNote(mx);
+  if (button !== 2 && petHit(mx, my) && !pointInBody(mx, my)) { petReact('pet'); return; }   // a tap on the pet pets it
   const items = [];
   for (let i = 0; i < room.n; i++) items.push({ i, d: Math.hypot(room.x[i] - mx, room.y[i] - my) });
   items.sort((a, b) => a.d - b.d);

@@ -229,7 +229,7 @@ function jumpFx(boost = false) {
     for (let i = 0; i < 7; i++) spawn({ x: P.ledgeX, y: P.ledgeY - 2, vx: (Math.random() - .3) * 140, vy: -Math.random() * 120, g: 260, type: 'star', size: 3 + Math.random() * 3, life: .45, max: .45, col: '#fff' });
   }
   if (state === 'play' && pressed) judgeJump(tPress);   // only real presses are judged; auto-repeat hops from holding are neutral
-  if (boost) { stretchKick(4); sfx.pad(); ripple(P.wx + P.w / 2, P.y + P.h, 1); buzz(12); for (let i = 0; i < 10; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h, vx: (Math.random() - .5) * 320, vy: -Math.random() * 200, g: 500, type: 'heart', size: 4 + Math.random() * 4, life: .6, max: .6, col: '#ff7ab8' }); }
+  if (boost) { stretchKick(4); sfx.bounce(); ripple(P.wx + P.w / 2, P.y + P.h, 1); buzz(12); for (let i = 0; i < 10; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h, vx: (Math.random() - .5) * 320, vy: -Math.random() * 200, g: 500, type: 'heart', size: 4 + Math.random() * 4, life: .6, max: .6, col: '#ff7ab8' }); }
   else sfx.jump();
   for (let i = 0; i < 5; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h, vx: (Math.random() - .5) * 160, vy: Math.random() * 60, g: 300, type: 'star', size: 4 + Math.random() * 3, life: .5, max: .5, col: '#fff' });
 }
@@ -261,7 +261,7 @@ function switchForm(f) {
 function standClear() { const L = P.wx + 3, R = P.wx + P.w - 3, top = P.y + P.h - CUBE_H; for (const s of solids) if (s.gate && R > s.x0 && L < s.x1 && top < s.bot) return false; return true; }
 function setFlat(f) {
   if (P.flat === f) return; const b = P.y + P.h; P.flat = f; P.h = f ? FLAT_H : CUBE_H; P.y = b - P.h;
-  if (simming) return; if (f) { sfx.squish(520, 'jelly'); buzz(8); SQ_.v -= 3; } else { sfx.bloop(1); SQ_.v += 3; }
+  if (simming) return; if (f) { sfx.flatten(); buzz(8); SQ_.v -= 3; } else { sfx.unflat(); SQ_.v += 3; }
 }
 function moveCube(dt, speed, lethal) {
   if (hasGate) { const want = inp.flat && P.grounded; if (want && !P.flat) setFlat(true); else if (!want && P.flat && standClear()) setFlat(false); }
@@ -357,7 +357,7 @@ function softAfterCore(dt, spd) {
     else {
       if (landEvt / K > 220) { const lv = landSquashV(landEvt / K); q.v -= lv; jelly.kick(lv * 40, -lv * 22); q.kv += (q.kv > 0 ? -1 : 1) * lv * .9; }   // landing: squash by how far it fell, so a big jump (a pad, an orb, a long drop) flattens it much more than a hop; the skin splats sideways and jiggles
       landEvt = 0;
-      { const was = q.pf > .5; q.pf += ((P.puffing ? 1 : 0) - q.pf) * Math.min(1, dt * 14); if (!was && q.pf > .5 && P.puffing) { sfx.bloop(1); buzz(6); q.v += 2; } }   // puffing up: a round "bloop", and the squash spring gives a little wobble
+      { const was = q.pf > .5; q.pf += ((P.puffing ? 1 : 0) - q.pf) * Math.min(1, dt * 14); if (!was && q.pf > .5 && P.puffing) { sfx.puff(); buzz(6); q.v += 2; } else if (was && q.pf <= .5 && !P.puffing) sfx.deflate(); }   // puffing up: a rising breath (and a "pfft" when it lets go), and the squash spring gives a little wobble
       if (q.pt > 0 && (q.pt -= dt) <= 0) { q.v += q.pv; q.pv = 0; }   // the takeoff stretch comes a beat after the squat
       q.was = P.grounded; q.lastVy = P.vy;
       q.kv += (-3600 * q.k - 7 * q.kv) * dt; q.k = clamp(q.k + q.kv * dt, -.3, .3);   // the lean rings at about 9 Hz and fades in a third of a second

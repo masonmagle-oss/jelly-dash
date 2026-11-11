@@ -510,8 +510,9 @@ function drawRoom() {
   ctx.fillStyle = '#fff'; ctx.fillRect(RM.l - 8, RM.b, RM.r - RM.l + 16, 7);
   if (studio && flow > .05) { ctx.fillStyle = 'rgba(255,190,235,' + (.16 * BP * flow).toFixed(3) + ')'; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t); }   // the room pulses with the beat as you build the song
   if (!studio) { drawDecor();
-    if (store.pet) { drawPet(store.pet, 330, RM.b - 3, .95);   // the pet sits by the rug; a heart floats over it while it has a gift for you
-      if (store.pet.day !== dayKey()) { const by = RM.b - 118 + Math.sin(tg * 3) * 5; ctx.fillStyle = C.hot; heartPath(330, by, 11); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); } } }
+    if (store.pet) { const ph = petHopY(); drawPet(store.pet, PA.x, RM.b - 3, .95, tg, { flip: PA.face, hop: PA.asleep ? 0 : (PA.mode === 'idle' && !PA.yo ? Math.max(0, Math.sin(tg * 2.2)) * 3 : ph), look: PA.look, sleep: PA.asleep, happy: PA.cheer > 0 });   // the pet wanders the room (petStep); a heart floats over it while it has a gift for you
+      if (PA.asleep) for (let i = 0; i < 2; i++) { const k = (tg * .5 + i * .5) % 1; ctx.globalAlpha = 1 - k; txt('z', PA.x + 22 + k * 14, RM.b - 96 - k * 30, 14 + i * 4, '#fff', C.plum); ctx.globalAlpha = 1; }
+      if (store.pet.day !== dayKey()) { const by = RM.b - 118 - ph + Math.sin(tg * 3) * 5; ctx.fillStyle = C.hot; heartPath(PA.x, by, 11); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); } } }
   drawParts(0);
   const pulling = room.grabs.some(g => !g.pin);
   drawSoft(room, 0, { ground: RM.b, open: pulling || room.inds.length > 0, squint: pulling && roomElong > .35 });
@@ -690,7 +691,7 @@ function drawPetPanel() {
   const frac = next ? clamp((p.love - lo) / (next[1] - lo), 0, 1) : 1; ctx.fillStyle = '#ff7ab8'; rr(rx, py + 152, Math.max(18, rw * frac), 18, 9); ctx.fill();
   txt(next ? `${p.love} / ${next[1]} love  ·  next: ${next[0]}` : `${p.love} love  ·  fully grown!`, rx, py + 184, 14, C.mauve, null, 'left');
   PET_FOOD.forEach((f, i) => btn(f.name, rx + i * 150, py + 206, 140, 78, () => {
-    const r = petFeed(f.id); if (r === 'short') { sfx.error(); say(`${f.cost - store.wallet} more hearts for a ${f.name.toLowerCase()}`); } else if (r === 'grew') { sfx.unlock(); say(p.name + ' grew into a ' + PET_STAGES[petStage(p.love)][0] + '!', 4); } else { sfx.bloop(1); }
+    const r = petFeed(f.id); if (r === 'short') { sfx.error(); say(`${f.cost - store.wallet} more hearts for a ${f.name.toLowerCase()}`); } else if (r === 'grew') { sfx.petMunch(); sfx.unlock(); say(p.name + ' grew into a ' + PET_STAGES[petStage(p.love)][0] + '!', 4); PA.cheer = 1.5; PA.asleep = false; } else { sfx.petMunch(); PA.cheer = .8; PA.asleep = false; }
   }, { size: 20, sub: '♥ ' + f.cost + '  ·  +' + f.love + ' love', ssize: 14, r: 18, off: false }));
   const gift = p.day !== dayKey(), amt = petGiftAmount(p);
   btn(gift ? `${p.name} found ${amt} hearts today!  Collect` : `Come back tomorrow for more hearts`, rx, py + 300, rw, 54, () => { const n = petGift(); if (n) { sfx.unlock(); say('+' + n + ' hearts from ' + p.name); } else sfx.click(); }, { size: 17, r: 18, on: gift, off: !gift });
