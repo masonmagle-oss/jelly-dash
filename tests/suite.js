@@ -322,6 +322,20 @@
       ok(J.OFFICIAL.filter(l => /\bf[ls]\d/.test(l.script)).length >= 2 && J.OFFICIAL.filter(l => l.puff).length >= 2, 'the power levels exist for the badges');
     } finally { st.best = JSON.parse(keep); await toTitle(); }
   });
+  test('results: the card says what was new (first clear, best score, best rating, not saved on Chill) and every HUD state draws', async () => {
+    const st = J.getStore(), keep = JSON.stringify([st.best, st.score, st.rate, st.pace]); const L = level('First Hop');
+    try {
+      st.best = {}; st.score = {}; st.rate = {}; st.pace = 1;
+      const finish = async (score, pace) => { st.pace = pace; await J.startLevel(L, 'dash', false); scoreNow = score; judgeN = 10; judgeBase = 900; got = 5; win(); const i = { ...winInfo }; await frames(2); J.draw(); return i; };
+      let w = await finish(100, 1); ok(w.first && w.saved && !w.bestScore && !w.bestStars, 'first clear: tagged first, nothing to beat yet');
+      w = await finish(200, 1); ok(!w.first && w.bestScore, 'a higher score is a new best score'); eq(w.prevScore, 100, 'against what was saved before');
+      w = await finish(150, 1); ok(!w.bestScore, 'a lower score is not');
+      w = await finish(900, .85); ok(!w.saved && !w.bestScore, 'Chill pace saves nothing, so nothing is called a best');
+      // every state draws without error
+      for (const s of ['play', 'dead', 'win']) { await J.startLevel(L, 'dash', false); J.setState(s); lastPct = 40; winT = 2; deadT = .3; await frames(2); J.draw(); }
+      await J.startLevel(L, 'practice', false); await frames(2); J.draw(); await J.startLevel(L, 'dash', false); combo = 6; await frames(2); J.draw();
+    } finally { [st.best, st.score, st.rate, st.pace] = JSON.parse(keep); J.setMode('dash'); await toTitle(); }
+  });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
     const tap = async b => { const r = cv.getBoundingClientRect(), V = J.getView(); const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
