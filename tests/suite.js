@@ -312,6 +312,16 @@
     await audit('practice', async () => { J.startLevel(level('First Hop'), 'practice', false); });
     J.setMode('dash'); await toTitle();
   });
+  test('title: one big Play / Continue button starts the next unbeaten level, and level cards show the power they teach', async () => {
+    const st = J.getStore(), keep = JSON.stringify(st.best); try {
+      st.best = {}; await toTitle(); let ui = J.getUi(); ok(ui.some(b => b.label === 'Play'), 'a new player sees Play'); eq(nextLevel().name, 'Welcome', 'and starts with Welcome');
+      for (const l of J.OFFICIAL.slice(0, 5)) st.best[l.id] = 100; await frames(3); ui = J.getUi(); ok(ui.some(b => b.label === 'Continue'), 'a returning player sees Continue'); eq(nextLevel().name, J.OFFICIAL[5].name, 'which goes to the first level not beaten');
+      for (const l of J.OFFICIAL) st.best[l.id] = 100; eq(nextLevel().name, J.OFFICIAL[1].name, 'with everything beaten Play still does something');
+      st.best = {}; await toTitle(); const big = J.getUi().find(b => b.label === 'Play'); ok(big.w >= 400 && big.h >= 80, 'the Play button is big'); for (const l of ['Levels', 'Zen', 'Practice', 'Squish Room', 'Squish Studio', 'Level Creator']) ok(J.getUi().some(b => b.label === l), l + ' is still one tap away');
+      playNext(); await frames(3); eq(J.getState(), 'play', 'Play starts a run'); eq(J.getMode(), 'dash', 'in Dash mode'); eq(J.OFFICIAL.indexOf(curLevel), 0, 'on the Welcome level');
+      ok(J.OFFICIAL.filter(l => /\bf[ls]\d/.test(l.script)).length >= 2 && J.OFFICIAL.filter(l => l.puff).length >= 2, 'the power levels exist for the badges');
+    } finally { st.best = JSON.parse(keep); await toTitle(); }
+  });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
     const tap = async b => { const r = cv.getBoundingClientRect(), V = J.getView(); const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
@@ -345,7 +355,7 @@
     const tapAt = async b => { const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
       cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 9, pointerType: 'touch', bubbles: true })); window.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 9, pointerType: 'touch' })); };
     try {
-      const dash = J.getUi().find(b => /^Dash/.test(b.label)); await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'first tap opens the list');
+      const dash = J.getUi().find(b => /^Levels/.test(b.label)); await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'first tap opens the list');
       await tapAt(dash); await frames(2); eq(J.getState(), 'select', 'an instant second tap must not start a level');
       await wait(300); const card = J.getUi().find(b => b.w > 160 && b.h > 80); await tapAt(card); await frames(2); eq(J.getState(), 'play', 'a deliberate tap later works');
     } finally { J.setGhostMs(0); await toTitle(); }
