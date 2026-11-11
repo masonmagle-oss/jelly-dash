@@ -472,10 +472,20 @@
       PA.react = -9; PA.cheer = 0; PA.yo = 0; petReact('pet'); ok(PA.cheer > 1 && PA.vy > 0, 'a tap makes it jump and cheer');
       ok(petHit(PA.x, RM.b - 30) && !petHit(PA.x + 300, RM.b - 30) && !petHit(PA.x, RM.t + 20), 'only a tap on the pet counts'); st.pet = null; ok(!petHit(PA.x, RM.b - 30), 'no pet, nothing to tap'); st.pet = { kind: 'bun', name: 'Mochi', love: 0, dyes: 1, dye: 0, day: '' };
       PA.react = -9; PA.cheer = 0; PA.yo = 0; PA.vy = 0; petReact('hop'); ok(PA.cheer > 0 && PA.vy > 0, 'a hop of the jelly nearby makes it jump too'); PA.react = tg; const c0 = PA.cheer; petReact('hop'); eq(PA.cheer, c0, 'reactions are rate limited');
+      // it runs to a held finger (and stops a little short), and bumps the jelly when it plays
+      room.impact = 0; room.deform = 0; room.grabs = []; room.inds = []; PA.x = 200; PA.mode = 'idle'; PA.asleep = false; PA.nudgeT = 0; PA.cheer = 0; PA.still = 0; roomDown(5, 760, 300, 0); ok(PA.fingerOn && PA.fx === 760, 'a touch on the room tells the pet where the finger is');
+      for (let i = 0; i < 60 * 8; i++) petStep(1 / 60); ok(PA.x > 560 && PA.x < 760, 'it runs toward a held finger and stops short of it (x ' + PA.x.toFixed(0) + ')'); roomRelease(null, true); ok(!PA.fingerOn, 'letting go ends the chase'); room.grabs = []; room.inds = [];
+      { const orig = room.push; let hit = null; room.push = (a, b) => { hit = [a, b]; }; try { PA.nudgeT = .05; PA.x = room.bounds().cx - 150; for (let i = 0; i < 6; i++) petStep(1 / 60); } finally { delete room.push; if (room.push !== orig) room.push = orig; } ok(hit && hit[0] > 0 && hit[1] < 0, 'its bump pushes the jelly away from it and a little up'); }
       room.impact = 0; room.deform = 0; room.grabs = []; room.inds = []; PA.mode = 'idle'; PA.cheer = 0; PA.still = 0; for (let i = 0; i < 60 * 20; i++) petStep(1 / 60);   // (the body is not stepping here, so its last impact must not count as a fresh thump) ok(PA.asleep, 'left alone it falls asleep'); PA.react = -9; petReact('pet'); petStep(1 / 60); ok(!PA.asleep, 'and a tap wakes it');
       for (const o of [{}, { flip: -1, look: 1 }, { sleep: true }, { happy: true, hop: 12 }]) for (const kind of ['bun', 'kit', 'bear']) { drawPet({ kind, love: 9000, dye: 0 }, 400, 400, 1, tg, o); }
       PA.asleep = true; J.draw(); PA.asleep = false; PA.face = -1; PA.cheer = 1; J.draw();
     } finally { st.pet = JSON.parse(keep); PA.asleep = false; PA.cheer = 0; PA.face = 1; PA.x = 330; PA.tx = 330; PA.mode = 'idle'; J.setMode('dash'); await toTitle(); }
+  });
+  test('editor tips: every tool explains itself and the level says which powers are on', async () => {
+    for (const [id, label] of TOOLS) ok(TOOL_TIPS[id] && TOOL_TIPS[id].length > 10 && TOOL_TIPS[id].length < 70, label + ' has a short tip');
+    eq(edPowerNote({}), ''); ok(/Puff/.test(edPowerNote({ puff: true })) && !/Bounce/.test(edPowerNote({ puff: true })), 'puff note'); ok(/Puff/.test(edPowerNote({ puff: true, bounce: true })) && /Bounce/.test(edPowerNote({ puff: true, bounce: true })), 'both notes');
+    openEditor(null); await frames(2); for (const [id] of TOOLS) { edTool = id; for (const f of [0, 1]) { edLevel.puff = !!f; edLevel.bounce = !!f; J.draw(); } }
+    const bad = J.auditUi(); ok(!bad.length, 'editor buttons still finger-sized: ' + bad.map(b => b.label).join()); edTool = 'block'; J.setMode('dash'); await toTitle();
   });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
