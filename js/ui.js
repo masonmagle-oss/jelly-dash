@@ -168,8 +168,8 @@ function drawSelect() {
       ctx.fillStyle = C.gold; rr(x + w - 82, y - 9, 76, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt('NEXT UP', x + w - 44, y + 3, TS.min, '#fff', null);
     }
     if (official) {   // power badges: which new move a level asks for
-      let bx = x + 10; for (const [name, col] of [['SQUISH', '#c86bff'], ['PUFF', '#4aa8ff']]) {
-        if (name === 'SQUISH' ? !/\bf[ls]\d/.test(L.script || '') : !L.puff) continue;
+      let bx = x + 10; for (const [name, col] of [['SQUISH', '#c86bff'], ['PUFF', '#4aa8ff'], ['BOUNCE', '#ff8a3d']]) {
+        if (name === 'SQUISH' ? !/\bf[ls]\d/.test(L.script || '') : name === 'PUFF' ? !L.puff : !L.bounce) continue;
         const bw = name.length * 8 + 18; ctx.fillStyle = col; rr(bx, y - 9, bw, 22, 11); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); txt(name, bx + bw / 2, y + 3, TS.min, '#fff', null); bx += bw + 6;
       }
     }
@@ -339,6 +339,21 @@ function practiceHud() {
   btn('✕ Undo', 156, 468, 112, 44, practiceUndo, { size: 18, clip });
   btn('Auto ' + (auto ? 'on' : 'off'), 276, 468, 112, 44, () => { store.autoCp = !auto; persist(); sfx.click(); say(store.autoCp ? 'Auto checkpoints on' : 'Auto checkpoints off', 1.2); }, { size: 17, clip, on: auto });
   txt('◆ ' + pcp.length, 412, 491, 22, '#fff', C.plum, 'left');
+}
+// the bounce cue: while the jelly falls toward something to land on, in a level with the bounce, a ring closes in on the landing spot and turns gold for the last BOUNCE_WINDOW seconds, when a tap springs it up high
+const BOUNCE_WINDOW = .12;   // the jump buffer (inp.buf): a tap this close to landing is remembered and fires on the landing
+function landingIn() {   // seconds until the falling jelly touches down, and where; null when nothing is below it
+  const feet = P.y + P.h, cx = P.wx + P.w / 2; let top = Infinity;
+  for (const s of solids) if (!s.ceil && cx > s.x0 && cx < s.x1 && s.top >= feet - 2 && s.top < top) top = s.top;
+  if (top === Infinity || P.vy <= 0) return null;
+  const d = top - feet; return { t: (-P.vy + Math.sqrt(P.vy * P.vy + 2 * G * d)) / G, top };
+}
+function bounceRing(scroll, bb) {
+  if (!hasBounce || state !== 'play' || P.form !== 'cube' || P.grounded) return;
+  const L = landingIn(); if (!L) return;
+  const ok = L.t <= BOUNCE_WINDOW, rx = 22 + clamp(L.t, 0, .6) * 170, x = bb.cx - scroll;
+  ctx.save(); ctx.lineWidth = ok ? 5 : 3; ctx.strokeStyle = ok ? C.gold : 'rgba(255,255,255,.85)'; ctx.globalAlpha = ok ? 1 : .8;
+  ctx.beginPath(); ctx.ellipse(x, L.top + 2, rx, rx * .22, 0, 0, 7); ctx.stroke(); if (ok) { ctx.fillStyle = 'rgba(255,215,94,.4)'; ctx.fill(); } ctx.restore();
 }
 const SQB = { x: W - 176, y: 440, w: 152, h: 78 };   // the on-screen Squish button (levels with gummy gates): hold it with one thumb, tap anywhere else to jump with the other
 function squishButton() {
@@ -591,6 +606,7 @@ function draw() {
     if (ship) drawShipBack(scroll);
     const bb0 = jelly.bounds(), q = SQ_, px = bb0.cx - scroll, sy = 1 + q.s, sx = 1 / Math.sqrt(sy);
     if (!ship && !P.grounded && P.coy > 0 && P.ledgeX != null && bb0.cx > P.ledgeX + 3) drawStrand(scroll, bb0);
+    bounceRing(scroll, bb0);
     drawSoft(jelly, scroll, { rot: ship ? 0 : q.rot, sx: ship ? 1 : sx * (1 + .2 * q.pf), sy: ship ? 1 : sy * (1 + .2 * q.pf), sk: ship || reduceMotion() ? 0 : q.k, ground: GY, alpha: ghost > 0 ? .45 + .2 * Math.sin(tg * 20) : 1, happy: state === 'win', open: (!P.grounded && P.vy < -100 && !ship) || (ship && inp.held) });
     if (ship) drawShipFront(scroll);
   }

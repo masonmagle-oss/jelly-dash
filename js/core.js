@@ -24,6 +24,7 @@ const W = 960, H = 540, T = 48, GY = 420, PX = 220;
 // the stage stays centred, every menu keeps its layout, and the world/backgrounds simply draw further out.
 let VX = 0, VW = W; const VMAX = 1300;
 const PUFF_T = 1.2, PUFF_G = .15, PUFF_V = 200;   // the puff power: in the air, holding Squish inflates the jelly into a balloon that falls slowly (gravity x PUFF_G, at most PUFF_V px/s at 112 BPM) for up to PUFF_T seconds (at 112 BPM; it scales with tempo like every jump) per hop
+const BOUNCE_K = 1.32, BOUNCE_MIN = 300;   // the bounce power: a tap just before landing (a fall faster than BOUNCE_MIN px/s at 112 BPM) springs up at BOUNCE_K x the ordinary jump speed
 const FLAT_H = 20, GATE_GAP = 28;   // the squish power: a flattened jelly is FLAT_H tall and slips under a gummy gate whose gap is GATE_GAP (a standing jelly, CUBE_H, does not fit)
 const STEP = 1 / 120, CEIL = 84, SHIP_H = 26, CUBE_H = 34, BASE_BPM = 112.5, TPB = 4;   // TPB: tiles per beat, so one tile = a 16th note
 // Tempo-scaled physics: a level's BPM sets its scroll speed, and all vertical motion is time-scaled by the same factor,

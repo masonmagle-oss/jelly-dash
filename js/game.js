@@ -205,13 +205,15 @@ function judgeJump(tp) {
   if (g === 'PERFECT' || g === 'GREAT') tuneNote(g);
   if (g === 'PERFECT') { spawn({ type: 'ring', x: P.wx + P.w / 2, y: P.y + P.h, size: 70, life: .5, max: .5 }); buzz(6); }
 }
-function jumpFx() {
+/* The bounce power (levels with extra.bounce): a tap that arrives while the jelly is still falling, just before it lands, is a squish-bounce: the landing squashes it flat and
+   it springs back up BOUNCE_K times as fast, about 1.7x as high and 1.3x as far, enough for tall blocks and gaps no ordinary jump clears. A tap after landing is an ordinary hop. */
+function jumpFx(boost = false) {
   // an input that arrived mid-frame is back-dated: the arc starts at the real press time, not at the next physics step
   const pressed = inp.buf > 0, hasT = pressed && inp.pt >= 0, tNow = P.wx / SPEED, lag = hasT ? tNow - inp.pt : 0, tPress = hasT ? inp.pt : tNow;
   const scramble = !P.grounded && P.ledgeX != null && P.wx + P.w / 2 > P.ledgeX + 3;   // took off from past the ledge, on coyote time
   if (P.flat) setFlat(false);   // a jump stands the jelly up first
-  P.vy = -JUMP; P.grounded = false; P.coy = 0; inp.buf = 0; inp.pt = -1;
-  if (lag > 0 && lag < .035) { P.y += P.vy * lag + .5 * G * lag * lag; P.vy += G * lag; }
+  P.vy = -JUMP * (boost ? BOUNCE_K : 1); P.grounded = false; P.coy = 0; inp.buf = 0; inp.pt = -1;
+  if (!boost && lag > 0 && lag < .035) { P.y += P.vy * lag + .5 * G * lag * lag; P.vy += G * lag; }   // (a bounce is not back-dated: the tap came before the landing, the spring-up starts at the landing)
   if (simming) return;
   jelly.kick(230, 80); stretchKick(5.2);   // takeoff: stretch tall
   if (scramble) {   // the grace made visible: the jelly pushes off its own sticky strand
@@ -219,7 +221,8 @@ function jumpFx() {
     for (let i = 0; i < 7; i++) spawn({ x: P.ledgeX, y: P.ledgeY - 2, vx: (Math.random() - .3) * 140, vy: -Math.random() * 120, g: 260, type: 'star', size: 3 + Math.random() * 3, life: .45, max: .45, col: '#fff' });
   }
   if (state === 'play' && pressed) judgeJump(tPress);   // only real presses are judged; auto-repeat hops from holding are neutral
-  sfx.jump();
+  if (boost) { stretchKick(4); sfx.pad(); ripple(P.wx + P.w / 2, P.y + P.h, 1); buzz(12); for (let i = 0; i < 10; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h, vx: (Math.random() - .5) * 320, vy: -Math.random() * 200, g: 500, type: 'heart', size: 4 + Math.random() * 4, life: .6, max: .6, col: '#ff7ab8' }); }
+  else sfx.jump();
   for (let i = 0; i < 5; i++) spawn({ x: P.wx + P.w / 2, y: P.y + P.h, vx: (Math.random() - .5) * 160, vy: Math.random() * 60, g: 300, type: 'star', size: 4 + Math.random() * 3, life: .5, max: .5, col: '#fff' });
 }
 // Jump orbs: touch one and press (a tap just before touching counts too) for one more full jump, from wherever you are. Each orb works once per attempt.
@@ -274,7 +277,7 @@ function moveCube(dt, speed, lethal) {
   if (!P.grounded && mode === 'zen' && ghost > 0 && P.vy >= 0 && P.y + P.h >= GY && prevB <= GY + 14) { P.y = GY - P.h; P.vy = 0; P.grounded = true; }
   if (P.grounded) { P.coy = COY; P.puff = PUFF_T; } else P.coy -= dt;
   inp.buf -= dt;
-  if (state === 'play' && (inp.buf > 0 || (autoHold && inp.held)) && (P.grounded || P.coy > 0) && (!P.flat || standClear())) jumpFx();   // jumping stays on while Zen's ghost protection is active (a flat jelly under a gate cannot jump: there is no room)
+  if (state === 'play' && (inp.buf > 0 || (autoHold && inp.held)) && (P.grounded || P.coy > 0) && (!P.flat || standClear())) jumpFx(hasBounce && !wasG && P.grounded && inp.buf > 0 && impactVy > BOUNCE_MIN * K);   // jumping stays on while Zen's ghost protection is active (a flat jelly under a gate cannot jump: there is no room)
   if (state === 'play' && P.y > H + 60) { die(); return false; }
   return true;
 }
