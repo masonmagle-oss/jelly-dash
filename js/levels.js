@@ -128,9 +128,15 @@ const OFFICIAL = [
   ['Boing Bay', 4, [6, 4, 5], 'h0 rest h1 b33 rest b33 h2 ss212 b34 rest b34', 118, 7, false, .06, { bounce: true, intro: true, hints: [
     'New move! Tap just BEFORE you land to bounce extra high', 'Land, bounce, land, bounce: the ring on the ground shows when to tap', 'Squish down, spring up: chain it from hop to hop'] }],
   ['Bounce House', 4, [6, 4, 5], 'ss212 b34 ss232 b33 ss321 b44 ss212 b34 ss232 b33 ss321', 117, 8, false, .06, { bounce: true }],
+  // the second wave (appended, so every saved id stays valid; slotted into the difficulty order below): an easy bridge near the start, two bridges that fill the climb to the finale,
+  // and the boss, Royal Jelly: the longest and hardest level, with gates, puffs, bounces and ship corridors in one run
+  ['Sprinkle Path', 1, [0, 2, 1], 's2 g3 s2 stairs s1 s2 bsp s2 g3 s2', 100, 0, true, .04],
+  ['Marshmallow Maze', 4, [2, 5, 0], 'pg7 ss321 fs23 pp63 ss331 fs22 ss321 pp73 ss331 fs23 pg6', 122, 6, false, .06, { puff: true }],
+  ['Lullaby Lane', 4, [6, 4, 5], 'b34 ss321 b44 ss331 b33 gs32 b34 ss232 ss321 b44 ss331', 126, 5, false, .06, { bounce: true }],
+  ['Royal Jelly', 5, [7, 3, 1], 'pg7 ss321 fs23 pp63 ss331 ship:2130421 ss232 b34 ss321 b44 ss331 b33 fl3 fs22 pg8 b44 ss331', 138, 8, false, .06, { puff: true, bounce: true }],
 ].map(([n, st, pal, sc, bpm, sty, auto, coy, extra], i) => genLevel('o' + i, n, st, pal, sc, bpm, sty, auto !== false, coy, extra));
 const moveBefore = (id, beforeName) => { const [l] = OFFICIAL.splice(OFFICIAL.findIndex(q => q.id === id), 1); OFFICIAL.splice(OFFICIAL.findIndex(q => q.name === beforeName), 0, l); };
-moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush'); moveBefore('o15', 'Jelly Bounce'); moveBefore('o16', 'Orb Orchard'); moveBefore('o17', 'Gap Year'); moveBefore('o18', 'Sugar Rush'); moveBefore('o19', 'Orbital'); moveBefore('o20', 'Orbital');
+moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('o14', 'First Hop'); moveBefore('o7', 'Sugar Rush'); moveBefore('o15', 'Jelly Bounce'); moveBefore('o16', 'Orb Orchard'); moveBefore('o17', 'Gap Year'); moveBefore('o18', 'Sugar Rush'); moveBefore('o19', 'Orbital'); moveBefore('o20', 'Orbital'); moveBefore('o21', 'Candy Steps'); moveBefore('o22', 'Heartbreaker'); moveBefore('o23', 'Slime Queen');   // (Royal Jelly, o24, stays last)
 /* Hearts that no winning run can take together with the rest (the arc's low end hearts sit where the jump over the hazard has already lifted you), found with
    heartsSync() in solver.js (at Chill, Normal and Spicy pace) and removed so every official level can be finished with all of its hearts at every speed.
    [x, y] in level units. The test suite re-runs the search,
@@ -138,6 +144,7 @@ moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('
 const UNREACHABLE_HEARTS = {
   'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1]], 'Sugar Rush': [[157, 3.6]], 'Bubble Tea': [[101, 3.6]],
   'Sparkle Storm': [[97, 2.2], [119, 1], [99, 2.2]], 'Orbital': [[82, 3.8], [254, 2.2]], 'Moonlit Mochi': [[178, 2.2]], 'Slime Queen': [[546, 2.2]],
+  'Sprinkle Path': [[75, 1]], 'Lullaby Lane': [[39, 4], [113.5, 4.9], [37.5, 4.9], [81, 4.9]],
   'Boing Bay': [[54, 1.4], [68, .8]], 'Bounce House': [[22, 1.4], [69.5, 4.9], [86, 1.4], [93, 4.9], [60.333, 2.2]],
 };
 for (const L of OFFICIAL) { const drop = UNREACHABLE_HEARTS[L.name]; if (drop) L.objs = L.objs.filter(o => o.t !== 'heart' || !drop.some(([x, y]) => Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002)); }
@@ -150,8 +157,8 @@ const WORLDS = [
   { id: 'night', name: 'Night Garden', tag: 'moonlight, music boxes and mochi', pal: [6, 4, 5], amb: 'night' },
   { id: 'slime', name: 'Slime Palace', tag: 'the queen is home', pal: [7, 3, 1], amb: 'slime' },
 ];
-const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Puff Pillow': 1, 'Pillow Fort': 2, 'Boing Bay': 3, 'Bounce House': 3, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4 };
-const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Puff Pillow': 9, 'Pillow Fort': 6, 'Boing Bay': 5, 'Bounce House': 3, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8 };   // indexes into STYLES (music.js)
+const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Puff Pillow': 1, 'Pillow Fort': 2, 'Boing Bay': 3, 'Bounce House': 3, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4, 'Sprinkle Path': 0, 'Marshmallow Maze': 3, 'Lullaby Lane': 3, 'Royal Jelly': 4 };
+const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Puff Pillow': 9, 'Pillow Fort': 6, 'Boing Bay': 5, 'Bounce House': 3, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8, 'Sprinkle Path': 4, 'Marshmallow Maze': 6, 'Lullaby Lane': 5, 'Royal Jelly': 11 };   // indexes into STYLES (music.js)
 for (const L of OFFICIAL) { L.world = WORLD_OF[L.name]; L.style = LEVEL_STYLE[L.name]; L.pal = WORLDS[L.world].pal.slice(); }
 
 /* ---------- live world built from the current level ---------- */
