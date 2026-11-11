@@ -216,7 +216,7 @@ function importSave() {
 }
 function resetProgress() {
   if (resetArm <= 0) { resetArm = 3; say('Tap again to reset your progress (levels you made are kept)', 3); return; }
-  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; store.wallet = 0; store.hb = {}; store.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; store.pet = null; persist(); say('Progress reset', 2.5);
+  resetArm = 0; store.best = {}; store.score = {}; store.rate = {}; store.studio = { stars: {} }; store.skin = 0; store.haz = 0; store.seenOrb = false; store.seenStudio = false; store.seenRoom = false; store.goals = null; store.wallet = 0; store.hb = {}; store.decor = { owned: {}, placed: {}, tier: {}, dye: {}, dyes: {} }; store.pet = null; store.room = { walls: { blush: true }, floors: { candy: true }, size: 0, wall: 'blush', floor: 'candy' }; persist(); say('Progress reset', 2.5);
 }
 function drawSettings() {
   drawBg(tg * 25, theme(.45, [0, 1, 2]));
@@ -496,18 +496,17 @@ function drawStudioUI() {
   }
 }
 function drawRoom() {
-  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#fff0f8'); g.addColorStop(1, '#e6d8ff');
-  ctx.fillStyle = '#f6c6e3'; ctx.fillRect(-30 - VX, -30, VW + 60, H + 60);
-  ctx.fillStyle = g; rr(RM.l - 14, RM.t - 14, RM.r - RM.l + 28, RM.b - RM.t + 28, 34); ctx.fill();
+  const wl = studio ? WALLS[0] : wallOf(), fl = studio ? FLOORS[0] : floorOf();   // the Studio keeps the plain pink room
+  ctx.fillStyle = wl.out; ctx.fillRect(-30 - VX, -30, VW + 60, H + 60);
+  rr(RM.l - 14, RM.t - 14, RM.r - RM.l + 28, RM.b - RM.t + 28, 34); ctx.save(); ctx.clip(); paintWall(wl, RM.l - 14, RM.t - 14, RM.r - RM.l + 28, RM.b - RM.t + 28); ctx.restore();
   ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.stroke();
-  const vg = ctx.createRadialGradient(W / 2, 250, 120, W / 2, 250, 520); vg.addColorStop(0, 'rgba(255,255,255,.55)'); vg.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = vg; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t);
+  if (wl.vig) { const vg = ctx.createRadialGradient(W / 2, 250, 120, W / 2, 250, 520); vg.addColorStop(0, `rgba(255,255,255,${wl.vig})`); vg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = vg; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t); }
   for (const f of floaters) {
     const x = RM.l + (((f.x + tg * (6 + f.s)) % 800) + 800) % 800, y = RM.t + 20 + ((f.y * 1.1 + Math.sin(tg + f.ph) * 10) % 360);
     ctx.globalAlpha = .55; ctx.fillStyle = f.k === 'h' ? '#fff' : '#fff7b8'; if (f.k === 'h') heartPath(x, y, f.s); else sparklePath(x, y, f.s * 1.3); ctx.fill(); ctx.globalAlpha = 1;
   }
-  const fg = ctx.createLinearGradient(0, RM.b, 0, RM.b + 60); fg.addColorStop(0, '#ff9ccf'); fg.addColorStop(1, '#c86bff');
-  ctx.fillStyle = fg; rr(RM.l - 14, RM.b, RM.r - RM.l + 28, 88, 20); ctx.fill();
+  rr(RM.l - 14, RM.b, RM.r - RM.l + 28, 88, 20); ctx.save(); ctx.clip(); paintFloor(fl, RM.l - 14, RM.b, RM.r - RM.l + 28, 88); ctx.restore();
   ctx.fillStyle = '#fff'; ctx.fillRect(RM.l - 8, RM.b, RM.r - RM.l + 16, 7);
   if (studio && flow > .05) { ctx.fillStyle = 'rgba(255,190,235,' + (.16 * BP * flow).toFixed(3) + ')'; ctx.fillRect(RM.l, RM.t, RM.r - RM.l, RM.b - RM.t); }   // the room pulses with the beat as you build the song
   if (!studio) { drawDecor();
@@ -539,9 +538,9 @@ function floorBar() {
   const y = 464, h = 38, gap = 6, ctrl = { size: 14 }, clip = { x0: 0, y0: RM.b + 3, x1: W, y1: H };   // clip: touch growth may not climb into the play area
   const left = [['‹ Back', 78, () => { sfx.back(); toTitle(); }, ctrl]];
   if (studio) left.push(...studioControls());
-  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 72, () => setPreset(m), { size: 14, on: roomPreset === m }]));
+  else ['jelly', 'slime', 'mochi', 'dough', 'foam'].forEach((m, i) => left.push([(isTouchUi() ? '' : (i + 1) + ' ') + PRESETS[m].name, 66, () => setPreset(m), { size: 14, on: roomPreset === m }]));
   const right = [['Skins', studio ? 84 : 70, () => { roomPanel = 'skins'; sfx.panel(true); }, ctrl]];
-  if (!studio) right.push(['Hazards', 78, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl], ['Decor', 70, () => { roomPanel = 'decor'; sfx.panel(true); }, ctrl], ['Pet', 58, () => { roomPanel = 'pet'; sfx.panel(true); }, { size: 14, on: !!store.pet && store.pet.day !== dayKey() }]);   // (lit while the pet has a gift waiting)
+  if (!studio) right.push(['Hazards', 74, () => { roomPanel = 'hazards'; sfx.panel(true); }, ctrl], ['Room', 62, () => { roomPanel = 'room'; sfx.panel(true); }, ctrl], ['Decor', 66, () => { roomPanel = 'decor'; sfx.panel(true); }, ctrl], ['Pet', 58, () => { roomPanel = 'pet'; sfx.panel(true); }, { size: 14, on: !!store.pet && store.pet.day !== dayKey() }]);   // (lit while the pet has a gift waiting)
   right.push(['Hop', studio ? 64 : 54, () => { initAudio(); roomHop(); }, ctrl], ['Reset', studio ? 76 : 64, roomReset, ctrl]);
   let x = 10; for (const [label, w, fn, o] of left) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
   x = W - 10 - right.reduce((n, it) => n + it[1] + gap, -gap); for (const [label, w, fn, o] of right) { btn(label, x, y, w, h, fn, Object.assign({ r: 15, clip }, o)); x += w + gap; }
@@ -579,10 +578,14 @@ function drawDecorPanel() {
   ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
   ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
   ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
-  txt('Decorate your room', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
-  DECOR_SLOTS.forEach((s, k) => {
+  txt(decorPage ? 'More places' : 'Decorate your room', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
+  DECOR_SLOTS.filter(s => !!s.exp === !!decorPage).forEach((s, k) => {
     const cx0 = px + 20 + (k % cols) * cw, cy0 = py + 58 + Math.floor(k / cols) * ch;
     ctx.fillStyle = 'rgba(245,235,250,.8)'; rr(cx0 + 4, cy0, cw - 8, ch - 8, 18); ctx.fill(); txt(s.name, cx0 + cw / 2, cy0 + 17, 16, C.plum, null);
+    if (!slotOpen(s)) {   // not unlocked yet: says what opens it, and a tap goes to the Room panel
+      const e = EXPANSIONS[s.exp - 1]; txt('Locked', cx0 + cw / 2, cy0 + 70, 22, '#9a86a8', null); txt('the ' + e.name + ' expansion opens this', cx0 + cw / 2, cy0 + 98, 14, C.mauve, null);
+      ui.push({ x: cx0 + 4, y: cy0, w: cw - 8, h: ch - 8, label: 'locked ' + s.id, fn: () => { roomPanel = 'room'; sfx.click(); say('Expand your room to open ' + s.name.toLowerCase() + 's'); } }); return;
+    }
     DECOR.filter(d => d.slot === s.id).forEach((it, i) => {
       const bx = cx0 + 14 + i * 90, by = cy0 + 32, bw = 84, bh = ch - 8 - 38, owned = !!store.decor.owned[it.id], on = store.decor.placed[s.id] === it.id, afford = store.wallet >= it.cost;
       ctx.fillStyle = on ? 'rgba(255,214,236,.95)' : '#fff'; rr(bx, by, bw, bh, 16); ctx.fill(); ctx.lineWidth = on ? 4 : 2.5; ctx.strokeStyle = on ? C.hot : C.blush; ctx.stroke();
@@ -595,9 +598,13 @@ function drawDecorPanel() {
       } });
     });
   });
-  btn('Style ▸', W / 2 - 220, py + ph - 66, 140, 48, () => { roomPanel = 'style'; sfx.click(); }, { size: 19 });
-  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+  btn('Style ▸', W / 2 - 296, py + ph - 66, 130, 48, () => { roomPanel = 'style'; sfx.click(); }, { size: 19 });
+  btn(decorPage ? '‹ Basics' : 'More ▸', W / 2 - 150, py + ph - 66, 130, 48, () => { decorPage = decorPage ? 0 : 1; sfx.click(); }, { size: 19 });
+  btn('Done', W / 2 - 2, py + ph - 66, 124, 48, close, { size: 20 });
+  btn('Room ▸', W / 2 + 140, py + ph - 66, 130, 48, () => { roomPanel = 'room'; sfx.click(); }, { size: 19 });
 }
+let decorPage = 0;   // the Decor and Style panels show the first six places, or the four the expansions open
+const slotsOnPage = () => DECOR_SLOTS.filter(s => !!s.exp === !!decorPage);
 // swatch colour of dye idx: the pink most of the decor is made of, shifted
 const dyeSwatch = idx => dyeColor('#ff7ab8', dyeHue(idx));
 // the Style panel: upgrade and recolour what is placed in the room (tiers and dyes, see room.js)
@@ -607,10 +614,10 @@ function drawStylePanel() {
   ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
   ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
   txt('Style your things', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
-  DECOR_SLOTS.forEach((s, k) => {
-    const y = py + 58 + k * rowH, it = decorItem(d.placed[s.id]), t = it ? d.tier[it.id] | 0 : 0, mid = y + (rowH - 8) / 2;
+  slotsOnPage().forEach((s, k) => {
+    const y = py + 58 + k * rowH, it = slotOpen(s) ? decorItem(d.placed[s.id]) : null, t = it ? d.tier[it.id] | 0 : 0, mid = y + (rowH - 8) / 2;
     ctx.fillStyle = 'rgba(245,235,250,.8)'; rr(px + 16, y, pw - 32, rowH - 8, 16); ctx.fill();
-    if (!it) { txt(s.name + ': nothing placed yet', px + 34, mid, 15, '#9a86a8', null, 'left'); return; }
+    if (!it) { txt(s.name + (slotOpen(s) ? ': nothing placed yet' : ': locked (expand your room)'), px + 34, mid, 15, '#9a86a8', null, 'left'); return; }
     ctx.save(); ctx.beginPath(); ctx.rect(px + 22, y + 2, 52, rowH - 12); ctx.clip(); ctx.translate(px + 48, mid + s.ic * .55); ctx.scale(s.sc * .62, s.sc * .62); paintDecor(it, t, d.dye[it.id] | 0); ctx.restore();
     txt(it.name, px + 84, mid - 9, 15, '#b03a82', null, 'left'); txt(TIERS[t] + (t ? ' ' + '★'.repeat(t) : ''), px + 84, mid + 10, 12, C.mauve, null, 'left');
     const next = t < 2 ? tierCost(it, t + 1) : 0;
@@ -624,8 +631,39 @@ function drawStylePanel() {
       txt(owned ? '' : '♥' + dy.cost, bx + 48, mid + 1, 12, owned ? C.mauve : C.hot, null);
     });
   });
-  btn('‹ Shop', W / 2 - 220, py + ph - 66, 140, 48, () => { roomPanel = 'decor'; sfx.click(); }, { size: 19 });
-  btn('Done', W / 2 - 62, py + ph - 66, 124, 48, close, { size: 20 });
+  btn('‹ Shop', W / 2 - 296, py + ph - 66, 130, 48, () => { roomPanel = 'decor'; sfx.click(); }, { size: 19 });
+  btn(decorPage ? '‹ Basics' : 'More ▸', W / 2 - 150, py + ph - 66, 130, 48, () => { decorPage = decorPage ? 0 : 1; sfx.click(); }, { size: 19 });
+  btn('Done', W / 2 - 2, py + ph - 66, 124, 48, close, { size: 20 });
+}
+// the Room panel: wallpapers, floors and expansions, the big heart sinks (room.js)
+function drawRoomPanel() {
+  const pw = 880, ph = 508, px = (W - pw) / 2, py = Math.max(6, (H - ph) / 2 - 6), close = () => { roomPanel = null; sfx.panel(false); }, r = store.room;
+  ctx.fillStyle = C.dim; ctx.fillRect(-VX, 0, VW, H); ui.push({ x: 0, y: 0, w: W, h: H, bg: true, fn: close });
+  ctx.fillStyle = 'rgba(255,255,255,.96)'; rr(px, py, pw, ph, 26); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.blush; ctx.stroke();
+  ui.push({ x: px, y: py, w: pw, h: ph, bg: true, fn: () => {} });
+  txt('Your room', W / 2, py + 34, 26, C.pink, null); walletChip(px + pw - 130, py + 12);
+  const row = (label, list, own, cur, kind, paint, y0) => {
+    txt(label, px + 28, y0 + 6, 16, C.plum, null, 'left');
+    list.forEach((it, i) => {
+      const bx = px + 22 + i * 120, by = y0 + 20, bw = 114, bh = 96, has = !!own[it.id], on = cur === it.id, afford = store.wallet >= it.cost;
+      ctx.fillStyle = on ? 'rgba(255,214,236,.95)' : '#fff'; rr(bx, by, bw, bh, 14); ctx.fill(); ctx.lineWidth = on ? 4 : 2.5; ctx.strokeStyle = on ? C.hot : C.blush; ctx.stroke();
+      ctx.save(); rr(bx + 6, by + 6, bw - 12, 46, 9); ctx.clip(); if (!has && !afford) ctx.globalAlpha = .6; paint(it, bx + 6, by + 6, bw - 12, 46); ctx.restore();
+      txt(it.name, bx + bw / 2, by + 66, 13, has ? '#b03a82' : C.plum, null); txt(has ? (on ? 'on ✓' : 'owned') : '♥ ' + it.cost, bx + bw / 2, by + 84, 13, has ? C.mauve : (afford ? C.hot : '#9a86a8'), null);
+      ui.push({ x: bx, y: by, w: bw, h: bh, label: kind + ' ' + it.id, fn: () => { const res = buyStyle(kind, it.id); if (res === 'short') { sfx.error(); say(`${it.cost - store.wallet} more hearts for ${it.name}`); } else if (res === 'bought') { sfx.unlock(); say(it.name + ' is yours!'); } else sfx.click(); } });
+    });
+  };
+  row('Wallpaper', WALLS, r.walls, r.wall, 'wall', (w, x, y, ww, hh) => paintWall(w, x, y, ww * 1.8, hh * 1.8), py + 52);
+  row('Floor', FLOORS, r.floors, r.floor, 'floor', (f, x, y, ww, hh) => paintFloor(f, x, y, ww * 1.8, hh * 1.8), py + 176);
+  txt('Expand your room', px + 28, py + 306, 16, C.plum, null, 'left');
+  EXPANSIONS.forEach((e, i) => {
+    const bx = px + 22 + i * 428, by = py + 322, bw = 410, bh = 84, bought = r.size > i, next = r.size === i, afford = store.wallet >= e.cost;
+    ctx.fillStyle = bought ? 'rgba(255,214,236,.95)' : '#fff'; rr(bx, by, bw, bh, 16); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = bought ? C.hot : C.blush; ctx.stroke();
+    txt(e.name, bx + 20, by + 28, 22, bought ? '#b03a82' : C.plum, null, 'left'); txt('opens ' + e.note, bx + 20, by + 56, 14, C.mauve, null, 'left');
+    if (bought) txt('open ✓', bx + bw - 24, by + 42, 18, C.mauve, null, 'right');
+    else { btn(next ? '♥ ' + e.cost : 'after ' + EXPANSIONS[i - 1].name, bx + bw - 150, by + 16, 134, 52, () => { const res = expandRoom(); if (res === 'short') { sfx.error(); say(`${e.cost - store.wallet} more hearts for ${e.name}`); } else if (res === 'expanded') { sfx.unlock(); say('Your room is ' + e.name + ' now!', 4); decorPage = 1; } }, { size: 18, r: 16, off: !next, on: next && afford }); }
+  });
+  btn('‹ Decor', W / 2 - 150, py + ph - 66, 130, 48, () => { roomPanel = 'decor'; sfx.click(); }, { size: 19 });
+  btn('Done', W / 2 - 2, py + ph - 66, 124, 48, close, { size: 20 });
 }
 // the Pet panel: adopt, feed, rename, recolour and collect the daily gift
 function drawPetPanel() {
@@ -667,6 +705,7 @@ function drawPetPanel() {
 function drawPicker() {
   if (roomPanel === 'goals') { drawGoals(); return; }
   if (roomPanel === 'decor') { drawDecorPanel(); return; }
+  if (roomPanel === 'room') { drawRoomPanel(); return; }
   if (roomPanel === 'style') { drawStylePanel(); return; }
   if (roomPanel === 'pet') { drawPetPanel(); return; }
   const isSk = roomPanel === 'skins', items = isSk ? SKINS : HAZ, cols = isSk ? 3 : 5, cw = 128, ch = 136, rows = Math.ceil(items.length / cols);

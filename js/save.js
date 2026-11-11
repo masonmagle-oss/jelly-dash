@@ -3,7 +3,7 @@
    Modules are classic scripts that share one global scope (so they can be loaded in order from index.html, in the order listed there). */
 
 /* ================= persistence ================= */
-const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 6;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
+const SAVE_KEY = 'jellydash-v2', SAVE_VERSION = 7;   // bump SAVE_VERSION and add a step in normalizeStore whenever the shape of `store` changes
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const num = (v, d) => Number.isFinite(+v) && v !== null && v !== '' ? +v : d;
 const DEFAULT_SET = { music: .8, sfx: .9, haptics: true, reduceMotion: null, tumble: true };   // reduceMotion: null = follow the device's setting
@@ -24,6 +24,10 @@ function normalizeStore(raw) {
     st.decor.tier[k] = clamp(cnt(isObj(dr.tier) ? dr.tier[k] : 0), 0, 2); st.decor.dyes[k] = (cnt(isObj(dr.dyes) ? dr.dyes[k] : 0) & 63) | 1; const d = cnt(isObj(dr.dye) ? dr.dye[k] : 0);
     st.decor.dye[k] = d <= 5 && (st.decor.dyes[k] >> d & 1) ? d : 0;
   }
+  // the room itself (room.js WALLS, FLOORS, EXPANSIONS): wallpaper and floor chosen and owned, and how many expansions (0..2) were bought
+  const rm = isObj(r.room) ? r.room : {}, ownedIds = (o, base) => { const out = { [base]: true }; if (isObj(o)) for (const k of Object.keys(o).slice(0, 30)) if (idOf(k) && o[k] === true) out[k] = true; return out; };
+  st.room = { walls: ownedIds(rm.walls, 'blush'), floors: ownedIds(rm.floors, 'candy'), size: clamp(cnt(rm.size), 0, 2) };
+  st.room.wall = idOf(rm.wall) && st.room.walls[rm.wall] ? rm.wall : 'blush'; st.room.floor = idOf(rm.floor) && st.room.floors[rm.floor] ? rm.floor : 'candy';
   // the pet: null until adopted; love (food eaten) sets how grown up it is; the gift is a once-a-day heart find
   const pt = isObj(r.pet) ? r.pet : null;
   st.pet = pt && ['bun', 'kit', 'bear'].includes(pt.kind) ? { kind: pt.kind, name: typeof pt.name === 'string' && pt.name.length ? pt.name.replace(/[<>&"`]/g, '').slice(0, 12) : 'Mochi', love: Math.min(1e6, cnt(pt.love)), dyes: (cnt(pt.dyes) & 63) | 1, day: txtOf(pt.day) } : null;

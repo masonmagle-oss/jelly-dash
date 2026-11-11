@@ -16,7 +16,12 @@ const dface = (x, y) => { ctx.fillStyle = C.ink; dcirc(x - 7, y, 2.6); ctx.fill(
 const DECOR_SLOTS = [
   { id: 'window', name: 'Window', x: 200, y: 170, sc: .42, ic: 4 }, { id: 'garland', name: 'Hanging', x: 480, y: RM.t + 4, sc: .15, ic: -14 }, { id: 'lamp', name: 'Lamp', x: 770, y: RM.t + 4, sc: .5, ic: -14 },
   { id: 'friend', name: 'Friend', x: 150, y: RM.b - 2, sc: .42, ic: 24 }, { id: 'rug', name: 'Rug', x: 480, y: RM.b + 12, sc: .2, ic: 10 }, { id: 'plant', name: 'Plant', x: 810, y: RM.b - 2, sc: .42, ic: 24 },
+  // four more places that open up as the room is expanded (EXPANSIONS below; `exp` is the expansion that unlocks it)
+  { id: 'frame', name: 'Picture', x: 640, y: 170, sc: .42, ic: 4, exp: 1 }, { id: 'pouf', name: 'Seat', x: 600, y: RM.b - 2, sc: .45, ic: 24, exp: 1 },
+  { id: 'shelf', name: 'Shelf', x: 345, y: 140, sc: .4, ic: -8, exp: 2 }, { id: 'nook', name: 'Nook', x: 725, y: RM.b - 2, sc: .32, ic: 24, exp: 2 },
 ];
+const dframe = bg => { ctx.fillStyle = '#fff'; rr(-48, -54, 96, 108, 12); ctx.fill(); ctx.fillStyle = bg; rr(-40, -46, 80, 92, 8); ctx.fill(); };
+const dshelf = () => { ctx.fillStyle = '#fff'; rr(-70, 0, 140, 9, 4); ctx.fill(); ctx.fillStyle = '#e8d2f4'; for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 50, 9); ctx.lineTo(s * 50, 24); ctx.lineTo(s * 36, 9); ctx.fill(); } };
 const DECOR = [
   { id: 'winsun', slot: 'window', name: 'Sunny', cost: 25, paint() { dwin('#bfe8ff'); ctx.fillStyle = '#ffd75e'; dcirc(14, -22, 12); ctx.fill(); ctx.fillStyle = '#fff'; dcirc(-14, 14, 10); ctx.fill(); dcirc(-2, 18, 12); ctx.fill(); dcirc(12, 14, 9); ctx.fill(); dcurtains(); } },
   { id: 'winstar', slot: 'window', name: 'Starry', cost: 55, paint() { dwin('#3a2a78'); ctx.fillStyle = '#fff3a8'; dcirc(14, -22, 12); ctx.fill(); ctx.fillStyle = '#fff'; for (const [x, y, s] of [[-22, -26, 5], [-24, 16, 4], [20, 26, 4]]) { sparklePath(x, y, s); ctx.fill(); } dcurtains(); } },
@@ -36,11 +41,25 @@ const DECOR = [
   { id: 'cactus', slot: 'plant', name: 'Cactus', cost: 15, paint() { dpot('#ff9ccf'); ctx.fillStyle = '#6ccf9a'; rr(-11, -84, 22, 62, 11); ctx.fill(); rr(-28, -66, 14, 10, 5); ctx.fill(); rr(-28, -66, 10, 28, 5); ctx.fill(); rr(14, -58, 14, 10, 5); ctx.fill(); rr(18, -58, 10, 24, 5); ctx.fill(); ctx.fillStyle = '#ff7ab8'; dcirc(0, -86, 6); ctx.fill(); } },
   { id: 'fern', slot: 'plant', name: 'Fern', cost: 35, paint() { for (let i = 0; i < 7; i++) { ctx.save(); ctx.translate(0, -26); ctx.rotate((i - 3) * .36); ctx.fillStyle = i % 2 ? '#5fc98f' : '#7fdca6'; ctx.beginPath(); ctx.ellipse(0, -30, 7, 30, 0, 0, 7); ctx.fill(); ctx.restore(); } dpot('#c9a8ff'); } },
   { id: 'flower', slot: 'plant', name: 'Big flower', cost: 60, paint() { dpot('#ffd75e'); ctx.fillStyle = '#5fc98f'; rr(-2.5, -96, 5, 70, 2); ctx.fill(); for (let i = 0; i < 6; i++) { const a = i * 1.047 + Math.sin(tg) * .08; dcirc(Math.cos(a) * 13, -102 + Math.sin(a) * 13, 10); dfill('#ff7ab8', '#fff', 2); } dcirc(0, -102, 9); dfill('#ffe566', '#fff', 2); } },
+  { id: 'frheart', slot: 'frame', name: 'Heart', cost: 60, paint() { dframe('#ffe3f2'); heartPath(0, 2, 24); ctx.fillStyle = '#ff7ab8'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); } },
+  { id: 'frrain', slot: 'frame', name: 'Rainbow', cost: 110, paint() { dframe('#e9f6ff'); ['#ff7ab8', '#ffd75e', '#8fe8d4', '#8fc4ff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 20, 27 - i * 6.5, Math.PI, 0); ctx.stroke(); }); } },
+  { id: 'frstar', slot: 'frame', name: 'Star map', cost: 190, paint() { dframe('#2f2468'); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-24, 22); ctx.lineTo(-8, -6); ctx.lineTo(10, 10); ctx.lineTo(24, -26); ctx.stroke(); ctx.fillStyle = '#fff3a8'; for (const [x, y, s] of [[-24, 22, 5], [-8, -6, 6], [10, 10, 5], [24, -26, 7], [-20, -30, 4]]) { sparklePath(x, y, s); ctx.fill(); } } },
+  { id: 'pfpink', slot: 'pouf', name: 'Pouf', cost: 50, paint() { rr(-32, -32, 64, 32, 15); dfill('#ff9ccf', '#fff', 3); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-18, -22); ctx.quadraticCurveTo(0, -16, 18, -22); ctx.stroke(); } },
+  { id: 'pfstar', slot: 'pouf', name: 'Star cushion', cost: 100, paint() { ctx.beginPath(); ctx.ellipse(0, -10, 36, 12, 0, 0, 7); dfill('#c9a8ff', '#fff', 3); sparklePath(0, -24, 22); dfill('#ffe566', '#fff', 3); } },
+  { id: 'pfbean', slot: 'pouf', name: 'Bean bag', cost: 200, paint() { ctx.beginPath(); ctx.moveTo(-34, 0); ctx.quadraticCurveTo(-44, -30, -14, -42); ctx.quadraticCurveTo(14, -52, 32, -30); ctx.quadraticCurveTo(44, -8, 34, 0); ctx.closePath(); dfill('#8fe8d4', '#fff', 3); dface(0, -22); } },
+  { id: 'shbooks', slot: 'shelf', name: 'Books', cost: 90, paint() { dshelf(); [['#ff9ccf', 14, 34], ['#c9a8ff', 12, 40], ['#ffd75e', 14, 30], ['#8fe8d4', 12, 38]].reduce((x, [c, w, h]) => { ctx.fillStyle = c; rr(x, -h, w, h, 3); ctx.fill(); return x + w + 2; }, -34); ctx.fillStyle = '#ff7ab8'; heartPath(46, -12, 9); ctx.fill(); } },
+  { id: 'shplants', slot: 'shelf', name: 'Plants', cost: 180, paint() { dshelf(); for (const [x, c] of [[-40, '#ff9ccf'], [0, '#c9a8ff'], [40, '#ffd75e']]) { ctx.fillStyle = '#6ccf9a'; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.ellipse(x + i * 7, -22, 4, 13, i * .5, 0, 7); ctx.fill(); } ctx.fillStyle = c; rr(x - 11, -14, 22, 14, 5); ctx.fill(); } } },
+  { id: 'shtreasure', slot: 'shelf', name: 'Treasures', cost: 300, paint() { dshelf(); ctx.fillStyle = 'rgba(200,235,255,.8)'; rr(-52, -36, 28, 36, 8); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#ffe566'; sparklePath(-38, -18, 9); ctx.fill(); dcirc(6, -14, 14); dfill('#c58a5b', '#fff', 2); dcirc(6, -33, 9); dfill('#c58a5b', '#fff', 2); dcirc(46, -12, 12); dfill('#ffb3d6', '#fff', 2); } },
+  { id: 'nktent', slot: 'nook', name: 'Tent', cost: 150, paint() { ctx.beginPath(); ctx.moveTo(-70, 0); ctx.lineTo(0, -92); ctx.lineTo(70, 0); ctx.closePath(); dfill('#ff9ccf', '#fff', 4); ctx.beginPath(); ctx.moveTo(-22, 0); ctx.lineTo(0, -46); ctx.lineTo(22, 0); ctx.closePath(); dfill('#8a3a7a'); ctx.fillStyle = '#ffd75e'; ctx.beginPath(); ctx.moveTo(0, -92); ctx.lineTo(0, -116); ctx.lineTo(18, -108); ctx.lineTo(0, -102); ctx.fill(); } },
+  { id: 'nkcloud', slot: 'nook', name: 'Cloud bed', cost: 300, paint() { for (const [x, y, rx, ry] of [[-34, -14, 30, 16], [34, -14, 30, 16], [0, -22, 42, 22]]) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); dfill('#fff', '#d9f0ff', 3); } ctx.beginPath(); ctx.ellipse(0, -22, 36, 17, 0, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); rr(-30, -46, 34, 20, 10); dfill('#ffc7e3', '#fff', 3); } },
+  { id: 'nkcastle', slot: 'nook', name: 'Castle', cost: 500, paint() { ctx.fillStyle = '#e8d2f4'; rr(-46, -62, 92, 62, 6); ctx.fill(); for (const x of [-60, 60]) { rr(x - 16, -86, 32, 86, 6); dfill('#c9a8ff', '#fff', 3); ctx.beginPath(); ctx.moveTo(x - 20, -86); ctx.lineTo(x, -112); ctx.lineTo(x + 20, -86); ctx.closePath(); dfill('#ff9ccf', '#fff', 3); } ctx.fillStyle = '#8a3a7a'; ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(-16, -26); ctx.quadraticCurveTo(0, -44, 16, -26); ctx.lineTo(16, 0); ctx.fill(); ctx.fillStyle = '#ffd75e'; for (const x of [-30, 0, 30]) { ctx.fillRect(x - 5, -72, 10, 10); } } },
 ];
 const decorItem = id => DECOR.find(d => d.id === id);
-// buy (when affordable) or toggle an item: 'bought' | 'placed' | 'removed' | 'short' (not enough hearts) | 'none' (no such item)
+const slotOpen = s => !s.exp || store.room.size >= s.exp;   // places beyond the first six open as the room is expanded
+// buy (when affordable) or toggle an item: 'bought' | 'placed' | 'removed' | 'short' (not enough hearts) | 'locked' (that place is not unlocked yet) | 'none' (no such item)
 function buyDecor(id) {
   const it = decorItem(id), d = store.decor; if (!it) return 'none';
+  if (!slotOpen(DECOR_SLOTS.find(s => s.id === it.slot))) return 'locked';
   if (!d.owned[id]) { if (store.wallet < it.cost) return 'short'; store.wallet -= it.cost; d.owned[id] = true; d.tier[id] = 0; d.dye[id] = 0; d.dyes[id] = 1; d.placed[it.slot] = id; persist(); return 'bought'; }
   if (d.placed[it.slot] === id) { delete d.placed[it.slot]; persist(); return 'removed'; }
   d.placed[it.slot] = id; persist(); return 'placed';
@@ -83,7 +102,7 @@ function withDye(hue, fn) {
 }
 const dyeHue = idx => DYES[idx].hue < 0 ? (tg * 60) % 360 : DYES[idx].hue;
 // where each place's sparkles drift (around the item's own origin), for the Deluxe and Golden looks
-const DECOR_FX = { window: [0, 0, 56, 62], garland: [0, 34, 250, 22], lamp: [0, 66, 42, 32], friend: [0, -52, 30, 52], rug: [0, 0, 170, 14], plant: [0, -52, 28, 52] };
+const DECOR_FX = { window: [0, 0, 56, 62], garland: [0, 34, 250, 22], lamp: [0, 66, 42, 32], friend: [0, -52, 30, 52], rug: [0, 0, 170, 14], plant: [0, -52, 28, 52], frame: [0, 0, 48, 52], pouf: [0, -18, 34, 20], shelf: [0, -14, 66, 28], nook: [0, -44, 62, 48] };
 function drawTierFx(slot, tier, n0) {
   const [fx, fy, rx, ry] = DECOR_FX[slot];
   if (tier >= 2) { const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, Math.max(rx, ry) * 1.15); g.addColorStop(0, 'rgba(255,225,120,.34)'); g.addColorStop(1, 'rgba(255,225,120,0)'); ctx.save(); ctx.translate(fx, fy); ctx.scale(1, ry / Math.max(rx, ry)); ctx.translate(-fx, -fy); ctx.fillStyle = g; ctx.fillRect(fx - rx * 1.2, fy - rx * 1.2, rx * 2.4, rx * 2.4); ctx.restore(); }
@@ -100,7 +119,63 @@ function paintDecor(it, tier, dye) {   // one item as it looks with its tier and
 }
 function drawDecor() {   // whatever is placed, on the wall and floor behind the jelly
   const d = store.decor;
-  for (const s of DECOR_SLOTS) { const it = decorItem(d.placed[s.id]); if (!it || it.slot !== s.id) continue; ctx.save(); ctx.translate(s.x, s.y); paintDecor(it, d.tier[it.id] | 0, d.dye[it.id] | 0); ctx.restore(); }
+  for (const s of DECOR_SLOTS) { const it = decorItem(d.placed[s.id]); if (!it || it.slot !== s.id || !slotOpen(s)) continue; ctx.save(); ctx.translate(s.x, s.y); paintDecor(it, d.tier[it.id] | 0, d.dye[it.id] | 0); ctx.restore(); }
+}
+
+/* ---------- the room itself: wallpapers, floors and expansions ----------
+   The biggest hearts sinks. Seven wallpapers and seven floors (the first of each is free and everyone starts with it) and two expansions that open four more places for decor.
+   store.room = { wall, floor, walls: {owned}, floors: {owned}, size }. paintWall / paintFloor fill any rectangle, so the room and the panel's swatches share them. */
+const WALLS = [
+  { id: 'blush', name: 'Blush', cost: 0, g: ['#fff0f8', '#e6d8ff'], out: '#f6c6e3', pat: 'none', vig: .55 },
+  { id: 'mint', name: 'Mint dots', cost: 90, g: ['#f0fff8', '#cdeedd'], out: '#a8e6c8', pat: 'dots', vig: .45 },
+  { id: 'lilac', name: 'Lilac stripes', cost: 180, g: ['#f5eeff', '#d9c8ff'], out: '#c4a8f0', pat: 'stripes', vig: .4 },
+  { id: 'sky', name: 'Sky', cost: 320, g: ['#eef8ff', '#c4e4ff'], out: '#8fc4f0', pat: 'clouds', vig: .4 },
+  { id: 'peach', name: 'Peach hearts', cost: 520, g: ['#fff4ea', '#ffd9c4'], out: '#f5b08f', pat: 'hearts', vig: .4 },
+  { id: 'midnight', name: 'Midnight', cost: 800, g: ['#3a2a78', '#1f1648'], out: '#6b4fb0', pat: 'stars', vig: 0 },
+  { id: 'aurora', name: 'Aurora', cost: 1400, g: ['#1f2a5c', '#2c1a5a'], out: '#5a6fd0', pat: 'aurora', vig: 0 },
+];
+const FLOORS = [
+  { id: 'candy', name: 'Candy', cost: 0, g: ['#ff9ccf', '#c86bff'], pat: 'none' },
+  { id: 'wood', name: 'Wood', cost: 70, g: ['#e0a878', '#b87a4c'], pat: 'planks' },
+  { id: 'checker', name: 'Checkers', cost: 150, g: ['#ffffff', '#ffe0f0'], pat: 'checker' },
+  { id: 'cloud', name: 'Clouds', cost: 280, g: ['#d9f0ff', '#a8d8ff'], pat: 'clouds' },
+  { id: 'meadow', name: 'Meadow', cost: 450, g: ['#8fe0a0', '#4fbf7a'], pat: 'meadow' },
+  { id: 'sprinkle', name: 'Sprinkles', cost: 700, g: ['#ffe3b8', '#ffbe9a'], pat: 'sprinkles' },
+  { id: 'galaxy', name: 'Galaxy', cost: 1200, g: ['#4a2e8a', '#1f1456'], pat: 'stars' },
+];
+const EXPANSIONS = [{ name: 'Roomy', cost: 500, note: 'a picture and a seat' }, { name: 'Grand', cost: 1800, note: 'a shelf and a nook' }];
+const wallOf = () => WALLS.find(w => w.id === store.room.wall) || WALLS[0], floorOf = () => FLOORS.find(f => f.id === store.room.floor) || FLOORS[0];
+function buyStyle(kind, id) {   // kind 'wall' | 'floor': 'bought' | 'set' | 'short' | 'none'
+  const list = kind === 'wall' ? WALLS : FLOORS, own = kind === 'wall' ? store.room.walls : store.room.floors, it = list.find(x => x.id === id); if (!it) return 'none';
+  if (!own[id]) { if (store.wallet < it.cost) return 'short'; store.wallet -= it.cost; own[id] = true; store.room[kind] = id; persist(); return 'bought'; }
+  store.room[kind] = id; persist(); return 'set';
+}
+function expandRoom() {   // 'expanded' | 'short' | 'max'
+  const n = store.room.size; if (n >= EXPANSIONS.length) return 'max'; const e = EXPANSIONS[n]; if (store.wallet < e.cost) return 'short';
+  store.wallet -= e.cost; store.room.size = n + 1; persist(); return 'expanded';
+}
+const twinkles = (x, y, w, h, n, col, k) => { ctx.fillStyle = col; for (let i = 0; i < n; i++) { const tw = .35 + .65 * (.5 + .5 * Math.sin(tg * 2 + i * 1.7)); ctx.globalAlpha = tw; sparklePath(x + ((i * 137.5) % 100) / 100 * w, y + ((i * 61.8 + 13) % 100) / 100 * h, (2.5 + (i % 3) * 1.4) * k + 1); ctx.fill(); } ctx.globalAlpha = 1; };
+function paintWall(wl, x, y, w, h) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, wl.g[0]); g.addColorStop(1, wl.g[1]); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  const k = w / 820, p = wl.pat, s = 44 * k; ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if (p === 'dots') { ctx.fillStyle = 'rgba(255,255,255,.75)'; for (let j = 0; j * s < h + s; j++) for (let i = 0; i * s < w + s; i++) { dcirc(x + (i + (j & 1) * .5) * s, y + j * s, 5 * k + 1); ctx.fill(); } }
+  else if (p === 'stripes') { ctx.fillStyle = 'rgba(255,255,255,.42)'; for (let i = 0; i * 62 * k < w; i++) ctx.fillRect(x + i * 62 * k, y, 30 * k, h); }
+  else if (p === 'clouds') { ctx.fillStyle = 'rgba(255,255,255,.7)'; [[.16, .2], [.52, .1], [.84, .26], [.34, .5], [.72, .55]].forEach(([fx, fy], i) => { const cx = x + w * fx + Math.sin(tg * .4 + i) * 8 * k, cy = y + h * fy; for (const [dx, dy, r] of [[-22, 4, 14], [0, -4, 19], [22, 4, 14]]) { ctx.beginPath(); ctx.ellipse(cx + dx * k * 1.4, cy + dy * k * 1.4, r * k * 1.6 + 1, r * k * 1.2 + 1, 0, 0, 7); ctx.fill(); } }); }
+  else if (p === 'hearts') { ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let j = 0; j * 66 * k < h + s; j++) for (let i = 0; i * 66 * k < w + s; i++) { heartPath(x + (i + (j & 1) * .5) * 66 * k, y + j * 58 * k + 10 * k, 7 * k + 1); ctx.fill(); } }
+  else if (p === 'stars') twinkles(x, y, w, h, 36, '#fff3c8', k);
+  else if (p === 'aurora') { ['#7affd4', '#8fa8ff', '#ff9ccf'].forEach((c, i) => { ctx.globalAlpha = .3; ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x + w * (.2 + .3 * i + .08 * Math.sin(tg * .5 + i * 2)), y + h * (.34 + .05 * Math.sin(tg * .7 + i)), w * .36, h * .17, -.25 + i * .25, 0, 7); ctx.fill(); }); ctx.globalAlpha = 1; twinkles(x, y, w, h, 18, '#ffffff', k); }
+  ctx.restore();
+}
+function paintFloor(fl, x, y, w, h) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, fl.g[0]); g.addColorStop(1, fl.g[1]); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  const k = w / 820, p = fl.pat; ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if (p === 'planks') { ctx.strokeStyle = 'rgba(110,60,30,.38)'; ctx.lineWidth = 2; ctx.beginPath(); for (let r = 1; r < 3; r++) { ctx.moveTo(x, y + h * r / 3); ctx.lineTo(x + w, y + h * r / 3); } for (let r = 0; r < 3; r++) for (let i = 0; i * 110 * k < w; i++) { const sx = x + (i * 110 + r * 47) * k; ctx.moveTo(sx, y + h * r / 3); ctx.lineTo(sx, y + h * (r + 1) / 3); } ctx.stroke(); }
+  else if (p === 'checker') { ctx.fillStyle = 'rgba(255,140,200,.4)'; const s = Math.max(8, 40 * k); for (let j = 0; j * s < h; j++) for (let i = 0; i * s < w; i++) if ((i + j) & 1) ctx.fillRect(x + i * s, y + j * s, s, s); }
+  else if (p === 'clouds') { ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse(x + w * (.08 + i * .17) + Math.sin(tg * .5 + i) * 6 * k, y + h * (.3 + (i % 2) * .38), 50 * k + 2, 12 * k + 2, 0, 0, 7); ctx.fill(); } }
+  else if (p === 'meadow') { ctx.fillStyle = '#3fae6a'; for (let i = 0; i * 17 * k < w; i++) { const bx = x + i * 17 * k, by = y + (((i * 37) % 10) / 10) * h * .8 + 8 * k; ctx.beginPath(); ctx.moveTo(bx - 4 * k, by + 12 * k); ctx.lineTo(bx, by - 4 * k); ctx.lineTo(bx + 4 * k, by + 12 * k); ctx.fill(); } for (let i = 0; i < 9; i++) { dcirc(x + w * (.06 + i * .11), y + h * (.25 + ((i * 3) % 4) * .17), 4 * k + 1.5); ctx.fillStyle = i % 2 ? '#ffe566' : '#ff9ccf'; ctx.fill(); } }
+  else if (p === 'sprinkles') { ctx.lineCap = 'round'; ctx.lineWidth = 4 * k + 1.5; for (let i = 0; i < 46; i++) { const sx = x + ((i * 71) % 100) / 100 * w, sy = y + ((i * 37 + 11) % 100) / 100 * h, a = i * 1.3; ctx.strokeStyle = ['#ff7ab8', '#8fc4ff', '#ffd75e', '#8fe8d4', '#c9a8ff'][i % 5]; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(a) * 8 * k, sy + Math.sin(a) * 8 * k); ctx.stroke(); } }
+  else if (p === 'stars') twinkles(x, y, w, h, 30, '#fff3c8', k);
+  ctx.restore();
 }
 
 /* ---------- the pet ----------
