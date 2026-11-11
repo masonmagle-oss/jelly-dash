@@ -370,6 +370,31 @@
       await J.startLevel(L, 'practice', false); await frames(2); J.draw(); await J.startLevel(L, 'dash', false); combo = 6; await frames(2); J.draw();
     } finally { [st.best, st.score, st.rate, st.pace] = JSON.parse(keep); J.setMode('dash'); await toTitle(); }
   });
+  test('cozy room: official wins fill the heart wallet (no farming), decor is bought, placed, saved, and everything draws', async () => {
+    const st = J.getStore(), keep = JSON.stringify([st.wallet, st.hb, st.decor, st.best, st.score, st.rate, st.pace]), L = level('First Hop');
+    try {
+      st.wallet = 0; st.hb = {}; st.decor = { owned: {}, placed: {} }; st.best = {}; st.score = {}; st.rate = {};
+      const win1 = async (hearts, pace = 1) => { st.pace = pace; await J.startLevel(L, 'dash', false); got = hearts; scoreNow = 10; judgeN = 10; judgeBase = 900; win(); return { ...winInfo }; };
+      let w = await win1(40); eq(w.earned, 50, '40 hearts and 10 for the first clear'); eq(st.wallet, 50);
+      w = await win1(40); eq(w.earned, 0, 'the same hearts again earn nothing'); w = await win1(46); eq(w.earned, 6, 'only the new ones'); eq(st.wallet, 56);
+      w = await win1(46, .85); eq(w.earned, 0, 'Chill pace pays nothing'); eq(st.wallet, 56);
+      const cx = J.genLevel('cx', 'cx', 1, [0, 1, 2], 's1', 104, 0, true, .09); cx.custom = true; st.pace = 1; await J.startLevel(cx, 'dash', false); got = 12; win(); eq(st.wallet, 56, 'a level from the editor pays nothing (no farming)');
+      eq(buyDecor('nope'), 'none', 'unknown item'); eq(buyDecor('disco'), 'short', 'too expensive'); eq(st.wallet, 56);
+      eq(buyDecor('cactus'), 'bought'); eq(st.wallet, 41); eq(st.decor.placed.plant, 'cactus', 'bought and put on');
+      eq(buyDecor('fern'), 'bought'); eq(st.wallet, 6); eq(st.decor.placed.plant, 'fern', 'one thing per place: the new one replaces the old');
+      eq(buyDecor('cactus'), 'placed', 'an owned one is free to put back'); eq(st.wallet, 6); eq(buyDecor('cactus'), 'removed'); ok(!st.decor.placed.plant, 'and to take off');
+      // saved data: round trip, and damaged data cannot place what you do not own
+      const back = J.normalizeStore(JSON.parse(JSON.stringify(st))); eq(back.wallet, 6); ok(back.decor.owned.cactus && back.decor.owned.fern, 'owned items survive'); eq(back.hb[L.id], 46, 'and the best hearts per level');
+      const bad = J.normalizeStore({ wallet: -5, hb: { a: 'x', b: 7 }, decor: { owned: { cactus: true, 'Bad id!': true, fern: 'yes' }, placed: { plant: 'fern', window: 'winsun', 'x y': 'cactus' } } });
+      eq(bad.wallet, 0, 'no negative hearts'); eq(bad.hb.a, 0); eq(bad.hb.b, 7); eq(Object.keys(bad.decor.owned).join(), 'cactus', 'only well-formed owned ids'); eq(Object.keys(bad.decor.placed).length, 0, 'nothing placed that is not owned');
+      // the catalogue and the drawing
+      eq(new Set(DECOR.map(d => d.id)).size, DECOR.length, 'unique ids'); ok(DECOR.every(d => d.cost > 0 && DECOR_SLOTS.some(s => s.id === d.slot)), 'prices and places'); for (const s of DECOR_SLOTS) eq(DECOR.filter(d => d.slot === s.id).length, 3, 'three things for ' + s.name);
+      st.wallet = 5000; J.setState('room'); await frames(2); for (const d of DECOR) { st.decor.owned[d.id] = true; st.decor.placed[d.slot] = d.id; if (DECOR.filter(x => x.slot === d.slot)[0] === d || true) { await frames(1); J.draw(); } }
+      roomPanel = 'decor'; await frames(3); J.draw(); const btns = J.getUi().filter(b => /^decor /.test(b.label)); eq(btns.length, DECOR.length, 'the panel has a button for every item');
+      st.decor = { owned: {}, placed: {} }; st.wallet = 100; await frames(2); J.getUi().find(b => b.label === 'decor winsun').fn(); ok(st.decor.owned.winsun && st.wallet === 75, 'a tap in the panel buys it');
+      roomPanel = null; J.draw(); const audit = J.auditUi(); ok(!audit.length, 'room buttons stay finger-sized: ' + audit.map(b => b.label).join());
+    } finally { [st.wallet, st.hb, st.decor, st.best, st.score, st.rate, st.pace] = JSON.parse(keep); roomPanel = null; J.setMode('dash'); await toTitle(); }
+  });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
     const tap = async b => { const r = cv.getBoundingClientRect(), V = J.getView(); const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
