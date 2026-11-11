@@ -13,7 +13,7 @@
   /* ---------- data ---------- */
   test('official levels: unique ids, sane fields, tutorial first', () => {
     const ids = new Set(); for (const l of J.OFFICIAL) { ok(!ids.has(l.id), 'duplicate id ' + l.id); ids.add(l.id); ok(l.name && l.objs.length && l.len > 40, 'bad level ' + l.name); ok(l.stars >= 1 && l.stars <= 5, 'stars ' + l.name); ok(l.coy >= .03 && l.coy <= .12, 'coyote ' + l.name); }
-    eq(J.OFFICIAL.length, 21, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
+    eq(J.OFFICIAL.length, 25, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
     for (const id of ['o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11']) ok(ids.has(id), 'saved id kept: ' + id);
   });
   test('level share codes round-trip every official level', () => {
@@ -617,7 +617,8 @@
     const steps = P.slice(1).map((p, i) => p - P[i]), avg = (P[P.length - 1] - P[0]) / steps.length;
     ok(P[P.length - 1] >= 2.5 * P[0], `the last level is only ${(P[P.length - 1] / P[0]).toFixed(1)}x the first (want 2.5x)`);
     ok(Math.max(...steps) <= 2 * avg, `no cliff: the biggest step (${Math.max(...steps).toFixed(2)}) is over twice the average (${avg.toFixed(2)})`);
-    const q = ls[ls.length - 1]; ok(q.name === 'Slime Queen' && st[st.length - 1].secs === Math.max(...st.map(s => s.secs)), 'the last level is Slime Queen, and the longest');
+    const q = ls[ls.length - 1]; ok(q.name === 'Royal Jelly' && P[P.length - 1] === Math.max(...P), 'the last level is the boss, Royal Jelly, and the hardest');
+    ok(ls[ls.length - 2].name === 'Slime Queen' && st[st.length - 2].secs === Math.max(...st.map(s => s.secs)), 'Slime Queen leads up to it, and is the longest (a boss is short and dense: its hearts take the solver far longer to prove than its length suggests)');
   });
 
   /* ---------- runner ---------- */
