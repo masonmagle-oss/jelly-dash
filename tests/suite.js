@@ -461,6 +461,22 @@
       roomPanel = null; decorPage = 0; J.draw(); const bad = J.auditUi(); ok(!bad.length, 'room buttons still finger-sized: ' + bad.map(b => b.label).join());
     } finally { [st.wallet, st.decor, st.room] = JSON.parse(keep); roomPanel = null; decorPage = 0; J.setMode('dash'); await toTitle(); }
   });
+  test('pet life: it wanders inside the room, jumps at taps and hops, sleeps when left alone, and everything draws', async () => {
+    const st = J.getStore(), keep = JSON.stringify(st.pet);
+    try {
+      st.pet = { kind: 'kit', name: 'Mochi', love: 0, dyes: 1, dye: 0, day: '' }; J.setState('room'); enterRoom(); await frames(2);
+      PA.x = 330; PA.tx = 330; PA.mode = 'idle'; PA.asleep = false; PA.still = 0; PA.cheer = 0; PA.yo = 0; PA.vy = 0; PA.t = .1;
+      const modes = new Set(); let lo = 1e9, hi = -1e9, bad = 0;
+      for (let i = 0; i < 60 * 14; i++) { petStep(1 / 60); modes.add(PA.mode); lo = Math.min(lo, PA.x); hi = Math.max(hi, PA.x); if (!(PA.yo >= 0 && PA.yo < 80) || !isFinite(PA.x)) bad++; if (i % 100 === 0) PA.still = 0; }
+      ok(modes.has('walk') && hi - lo > 40, 'it wandered (' + lo.toFixed(0) + ' to ' + hi.toFixed(0) + ')'); ok(lo >= RM.l + 40 && hi <= RM.r - 40, 'and stayed inside the room'); eq(bad, 0, 'its hops stay sane');
+      PA.react = -9; PA.cheer = 0; PA.yo = 0; petReact('pet'); ok(PA.cheer > 1 && PA.vy > 0, 'a tap makes it jump and cheer');
+      ok(petHit(PA.x, RM.b - 30) && !petHit(PA.x + 300, RM.b - 30) && !petHit(PA.x, RM.t + 20), 'only a tap on the pet counts'); st.pet = null; ok(!petHit(PA.x, RM.b - 30), 'no pet, nothing to tap'); st.pet = { kind: 'bun', name: 'Mochi', love: 0, dyes: 1, dye: 0, day: '' };
+      PA.react = -9; PA.cheer = 0; PA.yo = 0; PA.vy = 0; petReact('hop'); ok(PA.cheer > 0 && PA.vy > 0, 'a hop of the jelly nearby makes it jump too'); PA.react = tg; const c0 = PA.cheer; petReact('hop'); eq(PA.cheer, c0, 'reactions are rate limited');
+      room.impact = 0; room.deform = 0; room.grabs = []; room.inds = []; PA.mode = 'idle'; PA.cheer = 0; PA.still = 0; for (let i = 0; i < 60 * 20; i++) petStep(1 / 60);   // (the body is not stepping here, so its last impact must not count as a fresh thump) ok(PA.asleep, 'left alone it falls asleep'); PA.react = -9; petReact('pet'); petStep(1 / 60); ok(!PA.asleep, 'and a tap wakes it');
+      for (const o of [{}, { flip: -1, look: 1 }, { sleep: true }, { happy: true, hop: 12 }]) for (const kind of ['bun', 'kit', 'bear']) { drawPet({ kind, love: 9000, dye: 0 }, 400, 400, 1, tg, o); }
+      PA.asleep = true; J.draw(); PA.asleep = false; PA.face = -1; PA.cheer = 1; J.draw();
+    } finally { st.pet = JSON.parse(keep); PA.asleep = false; PA.cheer = 0; PA.face = 1; PA.x = 330; PA.tx = 330; PA.mode = 'idle'; J.setMode('dash'); await toTitle(); }
+  });
   test('pointer routing: a touch on a button runs it', async () => {
     await toTitle(); const cv = document.getElementById('c');
     const tap = async b => { const r = cv.getBoundingClientRect(), V = J.getView(); const x = r.left + (b.x + b.w / 2 + V.VX) / V.VW * r.width, y = r.top + (b.y + b.h / 2) / 540 * r.height;
