@@ -397,7 +397,8 @@ function cozyTick(dt, today = dayKey()) {   // time in the room: a cozy minute (
   if (g.secs >= 60) goalDone('cozy');
   if (g.daySecs >= 60 && g.lastCozy !== today) {
     g.streak = g.lastCozy === dayBefore(today) ? g.streak + 1 : 1; g.cozyDays++; g.lastCozy = today; persist();
-    say(g.streak > 1 ? 'Cozy day! ' + g.streak + ' in a row' : 'Cozy day! See you tomorrow', 3.5);
+    const bonus = REWARD.cozy + 5 * Math.min(g.streak - 1, 5); store.wallet += bonus; persist();   // a cozy day pays a little more for every day in a row
+    say((g.streak > 1 ? 'Cozy day! ' + g.streak + ' in a row' : 'Cozy day! See you tomorrow') + '  ♥ +' + bonus, 3.5);
   }
   if (tg - lastGoalSave > 10) { lastGoalSave = tg; persist(); }
 }
@@ -497,7 +498,7 @@ function completeShape() {
   const sh = SHAPES[studioShape], stars = studioSimAvg >= .93 ? 3 : studioSimAvg >= .88 ? 2 : 1;
   studioStars = stars; studioCel = 2.2; studioHold = 0; studioArmed = false;
   const before = doneCount();
-  if (stars > (store.studio.stars[sh.name] || 0)) { store.studio.stars[sh.name] = stars; persist(); }
+  { const prev = store.studio.stars[sh.name] || 0; if (stars > prev) { store.studio.stars[sh.name] = stars; const gain = (stars - prev) * REWARD.studio; store.wallet += gain; persist(); say('♥ +' + gain + ' for your room', 2.5); } }
   unlockNote(before);   // every 3 Studio stars count as a level: say so when that opens something
   [0, 2, 4, 7, 9, 12].forEach((d, i) => playDeg(d + 3, .07, i * .1)); buzz(30);
   for (let i = 0; i < 44; i++) spawn({ x: studioCx + (Math.random() - .5) * 300, y: studioCy - 140, vx: (Math.random() - .5) * 120, vy: 40 + Math.random() * 120, g: 60, type: 'conf', size: 5 + Math.random() * 4, rot: Math.random() * 6, vr: (Math.random() - .5) * 10, life: 3, max: 3, col: ['#ff6fb5', '#ffd1ec', '#c86bff', '#8fd8ff', '#fff3a8'][i % 5] });

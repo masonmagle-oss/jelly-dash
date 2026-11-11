@@ -39,7 +39,11 @@ function update(dt) {
         spawn({ x: P.wx - 4, y: P.y + P.h / 2 + 3, vx: -120 - Math.random() * 120, vy: (Math.random() - .5) * 80, type: Math.random() < .6 ? 'star' : 'drop', size: 2.5 + Math.random() * 3, life: .45, max: .45, col: inp.held ? '#ffe9a0' : '#fff' });
     }
   } else if (state === 'title' || state === 'win') {
-    titleT += dt; winT += dt;
+    const w0 = winT; titleT += dt; winT += dt;
+    if (state === 'win' && !simming) {   // the jelly and the pet join in as each rating heart pops (the card reveals them at .5 s, .72 s, .94 s)
+      for (let i = 0; i < winStars; i++) { const at = .5 + i * .22; if (w0 < at && winT >= at) { stretchKick(4 + i * 2); jelly.kick(200 + i * 60, 90); } }
+      if (w0 < .9 && winT >= .9 && store.pet && !testing && winStars >= 2) sfx.petHappy();
+    }
     stepPlayer(dt, 0, false);
     if (P.grounded && titleT > 1.3) { titleT = 0; jumpFx(); }
     softAfterCore(dt, 0);

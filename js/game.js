@@ -161,7 +161,12 @@ function winJingle() {
   if (!(winStars === 3 && tuneFanfare(c))) [0, 2, 4, 5, 7, 9].forEach((d, i) => voice(mf(degMidi(c, d)), 1.3, .06, i * .12, 'sfx'));
   for (let i = 0; i < winStars; i++) setTimeout(() => sfx.star(i), 900 + i * 220);
 }
-const REWARD = { first: 30, rating: 10, all: 15 };   // hearts for the room: a level's first clear, each rating heart gained (up to 3), and taking every heart in it
+/* The heart economy (hearts are spent in the Squish Room; the prices are in room.js). Base rewards: a level's first clear, each rating heart gained (up to 3), and taking every heart in it.
+   Levels further along pay more (rewardScale: +8% per level, topping out at 3.4x from level 31), so the later, harder levels fund the bigger prices. Smaller steady sources: the day's
+   daily level, each Studio star gained, and each cozy day in the room (more for a streak); the pet also finds hearts once a day. Replays pay only for improvements. */
+const REWARD = { first: 30, rating: 10, all: 15, daily: 25, studio: 8, cozy: 10 };
+const rewardScale = L => 1 + .08 * Math.min(30, Math.max(0, OFFICIAL.indexOf(L)));
+const rewardFor = L => { const s = rewardScale(L); return { first: Math.round(REWARD.first * s), rating: Math.round(REWARD.rating * s), all: Math.round(REWARD.all * s) }; };
 // what the results card shows about this win: first clear, personal bests (against what was saved before this run), and what it unlocked
 let winInfo = { first: false, bestScore: false, bestStars: false, saved: false, unlocked: [], prevScore: 0 };
 function win() {
@@ -178,12 +183,12 @@ function win() {
       if (scoreNow > (store.score[curLevel.id] || 0)) store.score[curLevel.id] = scoreNow;
       if (winStars > (store.rate[curLevel.id] || 0)) store.rate[curLevel.id] = winStars;
       if (OFFICIAL.includes(curLevel)) {   // hearts for the cozy room, a flat reward per level so a bigger level pays no more than a small one (see REWARD): once for the first clear, once for each rating heart gained, once for taking every heart; replays pay only for improvements, and levels from the editor pay nothing
-        const id = curLevel.id, prevH = store.hb[id] || 0, parts = []; let gain = 0;
-        if (winInfo.first) { gain += REWARD.first; parts.push('first clear ' + REWARD.first); }
-        const rg = Math.max(0, winStars - winInfo.prevRate) * REWARD.rating; if (rg) { gain += rg; parts.push('rating ' + rg); }
-        if (hearts.length && got >= hearts.length && prevH < hearts.length) { gain += REWARD.all; parts.push('every heart ' + REWARD.all); }
+        const id = curLevel.id, prevH = store.hb[id] || 0, parts = [], R = rewardFor(curLevel); let gain = 0;
+        if (winInfo.first) { gain += R.first; parts.push('first clear ' + R.first); }
+        const rg = Math.max(0, winStars - winInfo.prevRate) * R.rating; if (rg) { gain += rg; parts.push('rating ' + rg); }
+        if (hearts.length && got >= hearts.length && prevH < hearts.length) { gain += R.all; parts.push('every heart ' + R.all); }
         store.hb[id] = Math.max(prevH, got); store.wallet += gain; winInfo.earned = gain; winInfo.parts = parts;
-      }
+      } else if (/^daily-/.test(curLevel.id) && winInfo.first) { store.wallet += REWARD.daily; winInfo.earned = REWARD.daily; winInfo.parts = ['daily level ' + REWARD.daily]; }   // the day's level pays once
     }
     persist();
     const after = doneCount(), fresh = [...SKINS.filter(k => k.need > before && k.need <= after).map(k => k.name), ...HAZ.filter(h => h.need > before && h.need <= after).map(h => h.name)];

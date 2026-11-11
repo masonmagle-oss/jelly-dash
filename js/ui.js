@@ -436,6 +436,12 @@ function overlays() {
     if (winInfo.earned > 0) { const a = ease((winT - 1.1) / .4); ctx.globalAlpha *= a; txt('♥ +' + winInfo.earned + ' for your room  (' + winInfo.parts.join(', ') + ')', cx, cy0 + 338, 14, C.hot, null); ctx.globalAlpha = clamp(winT * 2, 0, 1); }
     else if (!winInfo.saved && mode === 'dash' && !testing) txt('Chill pace: score and hearts are not saved', cx, cy0 + 338, 13, C.mauve, null);
     ctx.restore();
+    if (store.pet && !testing && winT > .5) {   // your pet cheers beside the card: a little bob for one heart, hops for two, and jumping with hearts for three
+      const a = clamp((winT - .5) * 3, 0, 1), s3 = winStars >= 3, px = 138, py = cy0 + ch - 8, hop = s3 ? Math.abs(Math.sin(tg * 5)) * 30 : winStars === 2 ? Math.max(0, Math.sin(tg * 3)) * 14 : Math.max(0, Math.sin(tg * 2.2)) * 4;
+      ctx.globalAlpha = a; drawPet(store.pet, px, py, 1.15, tg, { flip: 1, hop, look: 1, happy: winStars >= 2 });
+      if (s3) for (let k = 0; k < 3; k++) { const ph = (tg * .8 + k / 3) % 1; ctx.globalAlpha = a * (1 - ph); ctx.fillStyle = C.hot; heartPath(px + (k - 1) * 20 + Math.sin(ph * 6 + k) * 6, py - 120 - ph * 70, 8); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
     if (winT > 1.2) { ctx.globalAlpha = .6 + .4 * Math.sin(tg * 4); txt(testing ? 'tap to return to the editor' : 'tap to continue', cx, cy0 + ch + 24, 22, '#fff', C.plum); }
     ctx.globalAlpha = 1;
   }
