@@ -3,7 +3,7 @@
    Modules are classic scripts that share one global scope (so they can be loaded in order from index.html, in the order listed there). */
 
 /* ================= ASMR audio ================= */
-let AC = null, master = null, uiBus = null, sfxBus = null, musBus = null, verbIn = null, songBus = null, noiseBuf = null, squeakG = null, squeakO = null, humG = null, squelchG = null, squelchF = null, muted = false, simming = false;
+let AC = null, master = null, duckG = null, uiBus = null, sfxBus = null, musBus = null, verbIn = null, songBus = null, noiseBuf = null, squeakG = null, squeakO = null, humG = null, squelchG = null, squelchF = null, muted = false, simming = false;
 const mf = m => 440 * Math.pow(2, (m - 69) / 12);
 function makeIR(sec, decay) {
   const len = AC.sampleRate * sec | 0, b = AC.createBuffer(2, len, AC.sampleRate);
@@ -19,6 +19,7 @@ function initAudio(ctx) {
     master = AC.createGain(); master.gain.value = muted ? 0 : .9;
     const lim = AC.createDynamicsCompressor(); lim.threshold.value = -12; lim.knee.value = 14; lim.ratio.value = 8; lim.attack.value = .003; lim.release.value = .2;   // a soft limiter: stacked sounds can never get startlingly loud
     master.connect(lim); lim.connect(AC.destination);
+    duckG = AC.createGain(); duckG.connect(master);   // every song plays through here, so the music can step back for a moment under the effects that carry information (see duck)
     const verb = AC.createConvolver(); verb.buffer = makeIR(2.6, 2.4);
     const vg = AC.createGain(); vg.gain.value = .6; verb.connect(vg); vg.connect(master);
     verbIn = AC.createGain(); verbIn.connect(verb);
@@ -52,9 +53,9 @@ const nowT = () => (clockOverride ? clockOverride() : AC.currentTime);
 // run fn with a throwaway audio graph on `ctx` (an OfflineAudioContext), then put the live one back
 let audioSwapped = false, audioOpen = false;   // audioSwapped: a throwaway graph is live, so the game loop must not touch songs or ambience. audioOpen: the render helper is scheduling right now; any other sound (the title mascot hopping, say) is dropped
 async function withAudioContext(ctx, fn) {
-  const keep = { AC, master, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb };
+  const keep = { AC, master, duckG, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb };
   AC = null; song = null; songBus = null; amb = null; audioSwapped = true; initAudio(ctx);
-  try { return await fn(); } finally { audioSwapped = false; audioOpen = false; clockOverride = null; ({ AC, master, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb } = keep); }
+  try { return await fn(); } finally { audioSwapped = false; audioOpen = false; clockOverride = null; ({ AC, master, duckG, uiBus, sfxBus, musBus, verbIn, songBus, noiseBuf, squeakG, squeakO, humG, squelchG, squelchF, song, amb } = keep); }
 }
 function tone(f, d, o = {}) {
   if (!AC || simming || (audioSwapped && !audioOpen)) return;
@@ -208,5 +209,16 @@ const SFX_TARGET = {   // the peak level (dBFS) every effect is calibrated to; t
   intro: -11, star: -22, unlock: -11, newBest: -11, die: -11, win: -11, puff: -19, deflate: -22, bounce: -14, flatten: -19, unflat: -21, petHop: -26, petHappy: -24, petMunch: -23, 'hit:gumdrop': -13, 'hit:taffy': -13, 'hit:mint': -13, 'hit:cloud': -13, 'hit:slime': -13,
 };   // (heart is a note in the song's own voice, so it follows the music instead)
 const SFX_TRIM = {"squish":3.32,"poke":5.78,"jump":3.47,"bloop":3.62,"pad":2.59,"portal":3.87,"die":2.07,"win":2.35,"click":11.48,"tap":17.78,"back":3.47,"toggle":7.16,"panel":9.89,"tick":11.56,"error":2.91,"unlock":3.63,"start":5.07,"checkpoint":2.85,"checkpointUndo":4.41,"newBest":1.23,"star":1.85,"combo":10.85,"land":2.3,"close":15.41,"intro":3.05,"orb":5.18,"stick":4.2,"puff":2.82,"deflate":2.84,"bounce":2.42,"flatten":3.23,"unflat":4.39,"petHop":3.63,"petHappy":1.28,"petMunch":1.43,"hit:gumdrop":4.79,"hit:taffy":3.25,"hit:mint":3.33,"hit:cloud":4.65,"hit:slime":5.05};   // measured by tests/calibrate.js (run it after changing any effect, then paste the table here)
-for (const k of Object.keys(sfx)) { const f = sfx[k]; sfx[k] = (...a) => { sfxTrim = SFX_TRIM[k] || 1; sfxBusName = UI_SFX.has(k) ? 'ui' : 'sfx'; try { return f(...a); } finally { sfxTrim = 1; sfxBusName = 'sfx'; } }; }
-function playHit(h) { sfxTrim = SFX_TRIM['hit:' + h.id] || 1; try { h.hit(); } finally { sfxTrim = 1; } }   // a hazard's bump sound, at its calibrated level
+/* Ducking: the effects that carry information (a pad or orb launching you, a power, a portal, a hit, the big moments) take priority over the music. For a moment the music steps back
+   by DUCK[effect][0] (a gain: .7 is about -3 dB), holds for DUCK[effect][1] seconds, then swells back over about a quarter of a second. Taps, hearts and jumps do not duck: they happen
+   all the time (and hearts and jumps are notes of the song itself), so ducking them would make the music pump. Only the song's own bus ducks; its reverb tail and the ambience carry on. */
+const DUCK = { pad: [.72, .1], orb: [.72, .1], bounce: [.75, .1], puff: [.82, .08], flatten: [.82, .08], portal: [.7, .22], stick: [.8, .08], land: [.88, .05],
+  die: [.5, .4], win: [.55, .7], newBest: [.6, .5], unlock: [.6, .5], star: [.78, .3], intro: [.65, .5], 'hit:': [.6, .15] };
+function duck(amt, hold) {
+  if (!AC || !duckG || simming || amt >= 1 || (audioSwapped && !audioOpen)) return;
+  const t = nowT(), g = duckG.gain, v = g.value;
+  g.cancelScheduledValues(t); g.setValueAtTime(v, t);   // start from wherever the last duck has got to, so a second one never clicks
+  g.setTargetAtTime(Math.min(v, amt), t, .012); g.setTargetAtTime(1, t + .02 + hold, .09);
+}
+for (const k of Object.keys(sfx)) { const f = sfx[k]; sfx[k] = (...a) => { sfxTrim = SFX_TRIM[k] || 1; sfxBusName = UI_SFX.has(k) ? 'ui' : 'sfx'; if (DUCK[k]) duck(...DUCK[k]); try { return f(...a); } finally { sfxTrim = 1; sfxBusName = 'sfx'; } }; }
+function playHit(h) { sfxTrim = SFX_TRIM['hit:' + h.id] || 1; duck(...DUCK['hit:']); try { h.hit(); } finally { sfxTrim = 1; } }   // a hazard's bump sound, at its calibrated level

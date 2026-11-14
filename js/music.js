@@ -105,7 +105,7 @@ function songStart(L, atT = 0) {
   const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 55; hp.Q.value = .6;
   const ls = AC.createBiquadFilter(); ls.type = 'lowshelf'; ls.frequency.value = 160; ls.gain.value = -4;
   const hs = AC.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 3000; hs.gain.value = 6;
-  bus.connect(hp); hp.connect(ls); ls.connect(hs); hs.connect(comp); comp.connect(mk); mk.connect(master);
+  bus.connect(hp); hp.connect(ls); ls.connect(hs); hs.connect(comp); comp.connect(mk); mk.connect(duckG || master);
   const send = AC.createGain(); send.gain.value = .4; bus.connect(send); send.connect(verbIn);
   songBus = bus;
   // melody and arpeggio go through a stereo echo (a dotted-8th on the left, an 8th on the right): width and bounce without muddying the drums or bass
