@@ -160,6 +160,15 @@ const WORLDS = [
 const WORLD_OF = { 'Welcome': 0, 'First Hop': 0, 'Candy Steps': 0, 'Puddle Hop': 0, 'Jelly Bounce': 0, 'Gummy Gates': 1, 'Puff Pillow': 1, 'Pillow Fort': 2, 'Boing Bay': 3, 'Bounce House': 3, 'Gap Year': 1, 'Little Ship': 1, 'Orb Orchard': 1, 'Cloud Nine': 1, 'Sugar Rush': 2, 'Bubble Tea': 2, 'Sparkle Storm': 2, 'Orbital': 3, 'Heartbreaker': 3, 'Moonlit Mochi': 3, 'Slime Queen': 4, 'Sprinkle Path': 0, 'Marshmallow Maze': 3, 'Lullaby Lane': 3, 'Royal Jelly': 4 };
 const LEVEL_STYLE = { 'Welcome': 10, 'First Hop': 10, 'Candy Steps': 1, 'Puddle Hop': 4, 'Gummy Gates': 3, 'Puff Pillow': 9, 'Pillow Fort': 6, 'Boing Bay': 5, 'Bounce House': 3, 'Jelly Bounce': 2, 'Gap Year': 9, 'Little Ship': 4, 'Orb Orchard': 0, 'Cloud Nine': 9, 'Sugar Rush': 6, 'Bubble Tea': 7, 'Sparkle Storm': 6, 'Orbital': 11, 'Heartbreaker': 3, 'Moonlit Mochi': 5, 'Slime Queen': 8, 'Sprinkle Path': 4, 'Marshmallow Maze': 6, 'Lullaby Lane': 5, 'Royal Jelly': 11 };   // indexes into STYLES (music.js)
 for (const L of OFFICIAL) { L.world = WORLD_OF[L.name]; L.style = LEVEL_STYLE[L.name]; L.pal = WORLDS[L.world].pal.slice(); }
+/* ---------- level packs (js/packs.js) ----------
+   Extra worlds and levels as plain data, appended after the 25 hand-made levels. makePackLevel is also what the level generator (tests/gen.html) and the tests use. */
+function makePackLevel(d) {
+  const L = genLevel(d.id, d.n, d.st, [0, 1, 2], d.sc, d.bpm, d.sty, d.auto !== false, d.coy == null ? .06 : d.coy, d.x || null);
+  if (d.drop) L.objs = L.objs.filter(o => o.t !== 'heart' || !d.drop.some(([x, y]) => Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002));
+  L.world = d.w; L.style = d.sty; L.pal = WORLDS[d.w].pal.slice(); return L;
+}
+if (typeof PACK_WORLDS !== 'undefined') PACK_WORLDS.forEach(w => WORLDS.push(w));
+if (typeof PACKS !== 'undefined') PACKS.forEach(d => OFFICIAL.push(makePackLevel(d)));
 
 /* ---------- live world built from the current level ---------- */
 const solids = [], spikes = [], pads = [], hearts = [], gaps = [], portals = [], orbs = [], clusters = [];

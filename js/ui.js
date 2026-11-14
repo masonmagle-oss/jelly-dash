@@ -139,15 +139,21 @@ function drawSelect() {
     txt('Pace', 492, 85, TS.small, '#fff', C.plum);
     [['Chill', .85], ['Normal', 1], ['Spicy', 1.12]].forEach(([nm, v], i) => btn(nm, 536 + i * 92, 62, 86, 44, () => { store.pace = v; persist(); sfx.click(); }, { size: 14, r: 12, on: Math.abs((store.pace || 1) - v) < .01 }));
   }
-  if (official) {   // one chip per world, then a banner for the chosen one
-    WORLDS.forEach((w, i) => btn((i + 1) + '  ' + w.name, 14 + i * 187, 116, 181, 50, () => { selWorld = i; sfx.tap(); }, { size: 15, r: 15, on: i === wi, sub: worldDone(i) + ' / ' + worldTotal(i) + ' beaten', ssize: 13 }));
+  if (official) {   // one chip per world (a row of 4 with arrows once there are more than 5 worlds), then a banner for the chosen one
+    const many = WORLDS.length > 5, vis = many ? 4 : WORLDS.length, sp = many ? 213 : 187, x0 = many ? 56 : 14;
+    if (wi !== worldSeen) { worldSeen = wi; if (wi < worldOff) worldOff = wi; else if (wi >= worldOff + vis) worldOff = wi - vis + 1; }   // a newly chosen world scrolls into view (the arrows can still move the row away from it)
+    worldOff = clamp(worldOff, 0, Math.max(0, WORLDS.length - vis));
+    if (many) { btn('◀', 14, 116, 36, 50, () => { worldOff = Math.max(0, worldOff - 1); sfx.tap(); }, { size: 18, r: 15, off: worldOff === 0 }); btn('▶', 910, 116, 36, 50, () => { worldOff = Math.min(WORLDS.length - vis, worldOff + 1); sfx.tap(); }, { size: 18, r: 15, off: worldOff >= WORLDS.length - vis }); }
+    WORLDS.forEach((w, i) => { if (i >= worldOff && i < worldOff + vis) btn((i + 1) + '  ' + w.name, x0 + (i - worldOff) * sp, 116, sp - 6, 50, () => { selWorld = i; sfx.tap(); }, { size: 15, r: 15, on: i === wi, sub: worldDone(i) + ' / ' + worldTotal(i) + ' beaten', ssize: 13 }); });
     txt('World ' + (wi + 1) + ' · ' + WORLDS[wi].name, 24, 186, 28, '#fff', C.plum, 'left'); txt(WORLDS[wi].tag, 24 + 8, 214, TS.small, '#fff', C.plum, 'left');
   }
   const list = (official ? selList().filter(l => l.world === wi) : selList().slice()), cards = [];
   if (pickFor === 'edit' && selTab === 1) cards.push({ nw: true });
   if (pickFor === 'edit' && selTab === 1 && edLevel && edDirty) cards.push({ cont: true });
   list.forEach(l => cards.push({ l }));
-  const per = official ? 99 : 15, pages = Math.max(1, Math.ceil(cards.length / per)); selPage = clamp(selPage, 0, pages - 1);
+  const per = official ? 8 : 15, pages = Math.max(1, Math.ceil(cards.length / per));   // official: two rows of four per page, so a world can hold any number of levels
+  if (selKey !== selTab + ':' + wi) { selKey = selTab + ':' + wi; const at = official && pickFor === 'play' ? list.indexOf(nextLevel()) : -1; selPage = at >= 0 ? Math.floor(at / per) : 0; }   // opening a world lands on the page that has the level Continue would start
+  selPage = clamp(selPage, 0, pages - 1);
   const show = cards.slice(selPage * per, selPage * per + per);
   show.forEach((c, i) => {
     const col = official ? i % 4 : i % 5, row = official ? Math.floor(i / 4) : Math.floor(i / 5), x = official ? 20 + col * 233 : 20 + col * 185, y = official ? 236 + row * 116 : 128 + row * 112, w = official ? 217 : 175, h = official ? 104 : 98;

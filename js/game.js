@@ -89,7 +89,7 @@ function leaveRun() {
   if (testing) { testing = false; buildLevel(edLevel); resetRun(); state = 'edit'; return; }
   buildLevel(curLevel); resetRun(); state = 'select'; titleT = 0;
 }
-function toTitle() { lastWorld = -1; ambStop(); roomPanel = null; holdCancel(); setSqueak(200, 0); setSquelch(0, 'slime'); setHum(0); humOn = 0; room.grabs = []; room.inds = []; room.boost = 1; songStop(); studio = false; flow = 0; if (roomPreset === 'clay') { roomPreset = 'slime'; room.prm = PRESETS.slime; room.relax(); } edPreview = false; testing = false; buildLevel(OFFICIAL[0]); resetRun(); state = 'title'; titleT = 0; }
+function toTitle() { lastWorld = -1; selKey = ''; ambStop(); roomPanel = null; holdCancel(); setSqueak(200, 0); setSquelch(0, 'slime'); setHum(0); humOn = 0; room.grabs = []; room.inds = []; room.boost = 1; songStop(); studio = false; flow = 0; if (roomPreset === 'clay') { roomPreset = 'slime'; room.prm = PRESETS.slime; room.relax(); } edPreview = false; testing = false; buildLevel(OFFICIAL[0]); resetRun(); state = 'title'; titleT = 0; }
 // Zen checkpoints: a spot with a short hazard-free stretch around it (so respawning there is never unfair)
 function clearAhead() {
   const a = P.wx - 40, b = P.wx + 140;
@@ -162,10 +162,11 @@ function winJingle() {
   for (let i = 0; i < winStars; i++) setTimeout(() => sfx.star(i), 900 + i * 220);
 }
 /* The heart economy (hearts are spent in the Squish Room; the prices are in room.js). Base rewards: a level's first clear, each rating heart gained (up to 3), and taking every heart in it.
-   Levels further along pay more (rewardScale: +8% per level, topping out at 3.4x from level 31), so the later, harder levels fund the bigger prices. Smaller steady sources: the day's
+   Harder levels pay more (rewardScale: +30% per star above the first, +8% per world up to world 13, so about 1x for a 1-star level in world 1 and 3x for a 5-star level in the seventh world); it
+   goes by the level's own difficulty and world, not its place in the list, so it still fits when the list grows to hundreds of levels. Smaller steady sources: the day's
    daily level, each Studio star gained, and each cozy day in the room (more for a streak); the pet also finds hearts once a day. Replays pay only for improvements. */
 const REWARD = { first: 30, rating: 10, all: 15, daily: 25, studio: 8, cozy: 10 };
-const rewardScale = L => 1 + .08 * Math.min(30, Math.max(0, OFFICIAL.indexOf(L)));
+const rewardScale = L => !OFFICIAL.includes(L) ? 1 : 1 + .3 * clamp((L.stars || 1) - 1, 0, 4) + .08 * clamp(L.world || 0, 0, 12);
 const rewardFor = L => { const s = rewardScale(L); return { first: Math.round(REWARD.first * s), rating: Math.round(REWARD.rating * s), all: Math.round(REWARD.all * s) }; };
 // what the results card shows about this win: first clear, personal bests (against what was saved before this run), and what it unlocked
 let winInfo = { first: false, bestScore: false, bestStars: false, saved: false, unlocked: [], prevScore: 0 };

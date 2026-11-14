@@ -13,7 +13,7 @@ const TOOL_TIPS = {
 };
 const edPowerNote = L => [L.puff ? 'Puff on: hold Squish in the air to float' : '', L.bounce ? 'Bounce on: tap just before landing to spring higher' : ''].filter(Boolean).join('  •  ');
 const COLUMN_TOOLS =['gap', 'ship', 'cube', 'gate'];   // tools that act on a whole column, not one cell
-let edPreview = false, edLevel = null, edScroll = 0, edTool = 'block', edPaint = null, edDirty = false, selTab = 0, selPage = 0, selWorld = -1, pickFor = 'play', delArm = null;
+let edPreview = false, edLevel = null, edScroll = 0, edTool = 'block', edPaint = null, edDirty = false, selTab = 0, selPage = 0, selWorld = -1, pickFor = 'play', delArm = null, selKey = '', worldOff = 0, worldSeen = -1;
 const clone = o => JSON.parse(JSON.stringify(o));
 function sanitize(o) {
   if (!o || !Array.isArray(o.objs)) return null;
