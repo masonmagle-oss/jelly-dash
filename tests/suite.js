@@ -667,6 +667,22 @@
     const L = J.OFFICIAL[3], k = window.proofKey(L, 1); eq(window.proofKey(L, 1), k, 'stable'); ok(window.proofKey(L, .85) !== k, 'pace'); ok(window.proofKey(Object.assign({}, L, { name: 'x', pal: [5, 5, 5], style: 3, stars: 5 }), 1) === k, 'cosmetics do not count');
     ok(window.proofKey(Object.assign({}, L, { coy: L.coy + .01 }), 1) !== k, 'coyote time counts'); ok(window.proofKey(Object.assign({}, L, { objs: L.objs.slice(1) }), 1) !== k, 'objects count'); ok(window.proofKey(Object.assign({}, L, { puff: !L.puff }), 1) !== k, 'power flags count');
   });
+  /* ---------- ducking ---------- */
+  test('music ducking: effects that carry information lower the music for a moment and it swells back; taps, hearts and jumps never duck', async () => {
+    for (const [k, [amt, hold]] of Object.entries(DUCK)) { ok(amt >= .4 && amt <= .9, k + ': a duck of ' + amt + ' is too deep or too small'); ok(hold >= .05 && hold <= .8, k + ': hold ' + hold); }
+    for (const k of ['heart', 'jump', 'click', 'tap', 'back', 'toggle', 'panel', 'tick', 'combo', 'squish']) ok(!(k in DUCK), k + ' happens all the time and must not duck the music');
+    // which effects ask for a duck, with which numbers (a spy stands in for duck)
+    const real = window.duck, calls = []; window.duck = (...a) => { calls.push(a); };
+    try { for (const k of ['pad', 'orb', 'portal', 'die', 'win', 'bounce']) { calls.length = 0; sfx[k](); eq(calls, [DUCK[k]], k + ' ducks the music'); }
+      for (const k of ['heart', 'jump', 'click', 'tap']) { calls.length = 0; sfx[k](); eq(calls.length, 0, k + ' does not duck'); }
+      calls.length = 0; playHit({ id: 'gumdrop', hit() { } }); eq(calls, [DUCK['hit:']], 'a hit ducks the music'); } finally { window.duck = real; }
+    // the real thing, rendered offline: a steady tone through the song bus dips to about the duck's gain, then recovers fully
+    const render = async act => { const sr = 22050, b = await J.renderSfxOffline(() => { const s = AC.createConstantSource(); s.offset.value = .05; s.connect(duckG); s.start(); act(); }, 2, sr), d = b.getChannelData(0);
+      const rms = (a, z) => { let s = 0; const i0 = Math.round(a * sr), i1 = Math.round(z * sr); for (let i = i0; i < i1; i++) s += d[i] * d[i]; return Math.sqrt(s / (i1 - i0)); }; return { dip: rms(.1, .2), after: rms(1.6, 1.9) }; };
+    const base = await render(() => { }), ducked = await render(() => window.duck(.5, .2));
+    ok(base.dip > .02, 'the test tone is audible (' + base.dip.toFixed(3) + ')'); ok(Math.abs(ducked.dip / base.dip - .5) < .08, 'the music dips to about the duck gain: ' + (ducked.dip / base.dip).toFixed(2) + ' of normal (want .5)');
+    ok(ducked.after / base.after > .97, 'and swells back: ' + (ducked.after / base.after).toFixed(2) + ' of normal after 1.6 s');
+  });
   /* ---------- the melody ---------- */
   test('melody: every style plays a hook (repeating rhythm and contour), stepwise, within an octave and a half, landing on chord tones on the beat', () => {
     for (let i = 0; i < SONG_N; i++) {
