@@ -13,7 +13,7 @@
   /* ---------- data ---------- */
   test('official levels: unique ids, sane fields, tutorial first', () => {
     const ids = new Set(); for (const l of J.OFFICIAL) { ok(!ids.has(l.id), 'duplicate id ' + l.id); ids.add(l.id); ok(l.name && l.objs.length && l.len > 40, 'bad level ' + l.name); ok(l.stars >= 1 && l.stars <= 5, 'stars ' + l.name); ok(l.coy >= .03 && l.coy <= .12, 'coyote ' + l.name); }
-    eq(J.OFFICIAL.length, 25, 'level count'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
+    eq(J.OFFICIAL.length, 25 + J.PACKS.length, 'level count: the 25 hand-made levels plus the level packs'); ok(J.OFFICIAL[0].tutorial, 'the Welcome level is first'); ok(J.OFFICIAL[0].hints.length >= 6, 'tutorial has its tips');
     for (const id of ['o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11']) ok(ids.has(id), 'saved id kept: ' + id);
   });
   test('level share codes round-trip every official level', () => {
@@ -71,6 +71,7 @@
     for (const L of J.OFFICIAL) { ok(J.WORLDS[L.world], 'world of ' + L.name); ok(L.style >= 0 && L.style < J.SONG_N, 'style of ' + L.name); eq(L.pal, J.WORLDS[L.world].pal, 'palette of ' + L.name); }
     const order = J.OFFICIAL.map(l => l.world); for (let i = 1; i < order.length; i++) ok(order[i] >= order[i - 1], 'worlds run in order (a world is one contiguous stretch)');
     eq([...new Set(order)].length, J.WORLDS.length, 'every world has levels');
+    for (const w of J.WORLDS) ok(w.id && w.name && w.tag && w.pal.length === 3 && J.AMB[w.amb], 'world fields: ' + w.id);
   });
   test('styles: every song is well-formed data', () => {
     ok(J.SONG_N >= 12, 'enough playable styles'); ok(J.STYLES.slice(J.SONG_N).every(s => s.menu) && !J.STYLES.slice(0, J.SONG_N).some(s => s.menu), 'menu styles come last');
@@ -213,7 +214,7 @@
     J.resetRun();
   });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
-    eq(WORLD_TUNE.length, J.WORLDS.length, 'one tune per world');
+    ok(WORLD_TUNE.length >= 5 && WORLD_TUNE.length <= J.WORLDS.length, 'a tune for each of the five built-in worlds'); ok(tuneFor({ world: J.WORLDS.length }) === null, 'a world without a tune just plays its song style');
     for (const w of WORLD_TUNE) ok(TUNES[w], 'world points at a missing tune');
     for (const t of TUNES) {
       ok(t.name && t.by && /1[78]\d\d/.test(t.by), t.id + ' needs a name and a composer with a (public-domain) year'); ok(t.notes.length >= 24 && t.notes.length <= 80, t.id + ' length ' + t.notes.length);
@@ -484,10 +485,12 @@
   test('heart economy: later levels pay more (capped), the steady extras pay small amounts, nothing pays twice, and the pet cheers on the results card', async () => {
     const st = J.getStore(), keep = JSON.stringify([st.wallet, st.hb, st.best, st.score, st.rate, st.pace, st.studio, st.goals, st.pet]);
     try {
-      eq(rewardScale(OFFICIAL[0]), 1, 'the first level pays the base amounts'); ok(rewardScale(OFFICIAL[10]) > rewardScale(OFFICIAL[5]), 'later levels pay more'); eq(rewardScale({}), 1, 'anything else pays the base');
+      eq(rewardScale(OFFICIAL[0]), 1, 'the first level pays the base amounts'); eq(rewardScale({}), 1, 'anything else pays the base'); eq(rewardScale({ __x: 1 }), 1, 'a level not in the official list pays the base');
+      const fake = (stars, world) => { const L = { stars, world }; OFFICIAL.push(L); const s = rewardScale(L); OFFICIAL.pop(); return s; };   // the scale follows the level's own stars and world, not its place in the list
+      ok(fake(5, 0) > fake(3, 0) && fake(3, 0) > fake(1, 0) && fake(1, 6) > fake(1, 0), 'harder levels and later worlds pay more'); ok(fake(5, 99) <= 1 + .3 * 4 + .08 * 12 + 1e-9, 'and the scale is capped (' + fake(5, 99).toFixed(2) + 'x)');
       const r0 = rewardFor(OFFICIAL[0]), rl = rewardFor(OFFICIAL[OFFICIAL.length - 1]); eq(r0.first, REWARD.first); ok(rl.first > r0.first && rl.rating > r0.rating && rl.all > r0.all, 'the last level pays more on every count');
-      ok(rewardScale({ __x: 1 }) === 1 && 1 + .08 * 30 <= 3.41, 'and the scale tops out at 3.4x');
-      const total = OFFICIAL.reduce((n, L) => { const r = rewardFor(L); return n + r.first + 3 * r.rating + r.all; }, 0); ok(total > 2500 && total < 4500, 'clearing every official level perfectly pays about three thousand hearts, got ' + total);
+      const total = OFFICIAL.slice(0, 25).reduce((n, L) => { const r = rewardFor(L); return n + r.first + 3 * r.rating + r.all; }, 0); ok(total > 2200 && total < 4500, 'clearing the 25 hand-made levels perfectly pays about three thousand hearts, got ' + total);
+      const per = OFFICIAL.reduce((n, L) => { const r = rewardFor(L); return n + r.first + 3 * r.rating + r.all; }, 0) / OFFICIAL.length; ok(per > 80 && per < 260, 'a level pays about a hundred hearts on average (so a few hundred levels fund the whole room), got ' + Math.round(per));
       st.wallet = 0; st.hb = {}; st.best = {}; st.score = {}; st.rate = {}; st.pace = 1; st.pet = null;
       const L = OFFICIAL[10], r = rewardFor(L); await J.startLevel(L, 'dash', false); got = hearts.length; scoreNow = 10; judgeN = 10; judgeBase = 900; win();
       eq(st.wallet, r.first + 3 * r.rating + r.all, 'level eleven pays its scaled first clear, rating and every-heart'); const w1 = st.wallet; win(); eq(st.wallet, w1, 'the same win again pays nothing');
@@ -581,46 +584,105 @@
   }, { slow: true });
 
   /* ---------- the levels themselves ---------- */
-  const paces = FULL ? [.85, 1, 1.12] : [1];
+  // The proofs are remembered in tests/proofs.json (see tests/proofs.js): a level whose data and the engine are unchanged since its last proof is not proved again. ?fresh proves everything again.
+  const paces = FULL ? [.85, 1, 1.12] : [1], FRESH = location.search.includes('fresh'), NEWP = { fp: '', beat: {}, hearts: {} }; let PR = { fp: '', beat: {}, hearts: {} }, cacheOn = false, auditKey = '';
+  window.__proofsOut = NEWP; window.__cacheInfo = {};
+  test('proof cache: trusted only while the engine fingerprint matches; one cached proof is re-run as a spot check', async () => {
+    const t0 = performance.now(); NEWP.fp = window.engineFp(); PR = await window.loadProofs(FRESH); cacheOn = !FRESH && PR.fp === NEWP.fp;
+    const have = []; if (cacheOn) for (const L of J.OFFICIAL) for (const p of paces) if (PR.beat[window.proofKey(L, p)]) have.push(window.proofKey(L, p));
+    auditKey = have.length ? have[Math.floor(Math.random() * have.length)] : '';
+    window.__cacheInfo = { fresh: FRESH, cacheOn, engine: NEWP.fp, saved: PR.fp, cachedBeat: have.length, audit: auditKey, ms: Math.round(performance.now() - t0) };
+  }, { slow: true });
+  // a proof: skipped when cached, run (and so able to fail) otherwise; either way it goes into the cache this run writes
+  const proved = (kind, L, pace, run) => { const key = window.proofKey(L, pace); if (!(cacheOn && PR[kind][key] && key !== auditKey)) run(); NEWP[kind][key] = 1; };
   for (const L of J.OFFICIAL) for (const pace of paces)
-    test(`level is beatable: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.solveSync(Object.assign({}, L, { bpm: L.bpm * pace }), 30000); ok(r.ok, `solver reached ${r.pct}%`); }, { slow: true });
+    test(`level is beatable: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => proved('beat', L, pace, () => { const r = J.solveSync(Object.assign({}, L, { bpm: L.bpm * pace }), 30000); ok(r.ok, `solver reached ${r.pct}%`); }), { slow: true });
   // 100% must be possible: one winning run can touch every heart of every official level, at every pace the game offers (Chill, Normal, Spicy)
   for (const L of J.OFFICIAL) for (const pace of [.85, 1, 1.12])
-    test(`every heart can be collected in one run: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `best run gets ${r.best}/${r.total}; unreachable (add to UNREACHABLE_HEARTS in levels.js): ${JSON.stringify(r.missed)}`); }, { slow: true });
+    test(`every heart can be collected in one run: ${L.name}${pace === 1 ? '' : ' at ' + pace + 'x'}`, () => proved('hearts', L, pace, () => { const r = J.heartsSync(Object.assign({}, L, { bpm: L.bpm * pace }), 6); ok(r.ok && r.best === r.total, `best run gets ${r.best}/${r.total}; unreachable (add to UNREACHABLE_HEARTS in levels.js, or to the level's drop list in js/packs.js): ${JSON.stringify(r.missed)}`); }), { slow: true });
 
   /* ---------- the difficulty ramp ---------- */
-  // "Pressure" = how much the player has to get right per second. Every hazard is an event and counts 1000 / (its window of safe takeoffs, in ms at the level's tempo),
-  // so a narrow window or a faster tempo weighs more. Windows come from buildLevel's clusters (in tiles, so they shrink as the tempo rises). A spike group of 4+ or a gap of 6+
-  // is crossed with a pad or orb, which are counted as their own (medium) events. A ship row counts by how far its corridor moves from the last one (a big move leaves less slack).
-  const pressureOf = L => {
-    J.buildLevel(L); const K = L.bpm / 112.5, msTile = 1000 * T / (360 * K); let w = 0, n = 0, tight = Infinity;
-    const add = ms => { w += 1000 / ms; n++; tight = Math.min(tight, ms); };
-    for (const c of clusters) {
-      if (c.ship) continue;
-      if (L.puff && c.kind === 'gap' && c.n >= 6) { add((c.n >= 8 ? 130 : c.n === 7 ? 170 : 220) / K); continue; }   // a wide gap in a puff level: hop and float across (the narrower the time to take off, the heavier)
-      if (L.bounce && c.kind === 'block' && c.h >= 3) { add(260 / K); continue; }   // a tall block in a bounce level: land, tap just before touching down, spring over it
-      if (L.bounce && c.kind === 'gap' && c.n >= 6) { add(200 / K); continue; }
-      if ((c.kind === 'spike' && c.n >= 4) || (c.kind === 'gap' && c.n >= 6)) continue; add(Math.max(c.win * msTile, 45));
+  // "Pressure" (the difficulty model, in tests/pressure.js) = how much the player has to get right per second. The ramp is per world, so the list can grow to hundreds of levels: inside
+  // each world the tempo and the stars never drop and the pressure climbs a notch with every level, with no cliff, and the world's last level (its boss) is its hardest. Across worlds
+  // only the bosses are compared: each world's boss is harder than the last. A new world may start easier than the one before it (a fresh climb) but must end harder.
+  // Welcome is the tutorial and a power's intro level (extra.intro) is gentle on purpose: they teach the ideas, so they are not part of the ramp.
+  const pressureOf = window.pressureOf, rampOf = w => J.OFFICIAL.filter(l => l.world === w && !l.intro && !l.tutorial);
+  test('difficulty ramp: inside every world, tempo and stars never drop and the pressure climbs a notch with every level, with no cliff', () => {
+    for (let w = 0; w < J.WORLDS.length; w++) {
+      const ls = rampOf(w), P = ls.map(l => pressureOf(l).P), W = J.WORLDS[w].name;
+      for (let i = 1; i < ls.length; i++) {
+        ok(ls[i].bpm >= ls[i - 1].bpm, `${W}: ${ls[i].name} (${ls[i].bpm} BPM) is slower than ${ls[i - 1].name} (${ls[i - 1].bpm})`);
+        ok(ls[i].stars >= ls[i - 1].stars, `${W}: ${ls[i].name} has fewer stars than ${ls[i - 1].name}`);
+        ok(P[i] >= P[i - 1] + .1, `${W}: ${ls[i].name} (pressure ${P[i].toFixed(2)}) is not clearly harder than ${ls[i - 1].name} (${P[i - 1].toFixed(2)})`);
+      }
+      if (ls.length >= 4) { const steps = P.slice(1).map((p, i) => p - P[i]), avg = (P[P.length - 1] - P[0]) / steps.length; ok(Math.max(...steps) <= 2 * avg, `${W}: no cliff: the biggest step (${Math.max(...steps).toFixed(2)}) is over twice the average (${avg.toFixed(2)})`); }
+      if (ls.length >= 2) ok(P[P.length - 1] === Math.max(...P), `${W}: the last level, ${ls[ls.length - 1].name}, is the world's boss and must be its hardest`);
     }
-    J.pads.forEach(() => add(300 / K)); for (const o of L.objs) if (o.t === 'orb') add(180 / K);
-    for (const s of solids) if (s.gate) add(215 / K);   // a gummy gate: squish in time (about a fifth of a second of room at 112 BPM)
-    for (const m of L.script.matchAll(/ship:(\d+)/g)) [...m[1]].map(Number).forEach((s, i, a) => add(Math.max(120, 330 - 45 * Math.abs(s - (i ? a[i - 1] : 2))) / K));
-    return { P: w / (L.len * T / (360 * K)), secs: L.len * T / (360 * K), n, tight };
-  };
-  test('difficulty ramp: tempo never drops and the pressure climbs a notch with every level', () => {
-    const ls = J.OFFICIAL.slice(1).filter(l => !l.intro), st = ls.map(pressureOf), P = st.map(s => s.P); J.buildLevel(J.OFFICIAL[0]);   // Welcome is the tutorial and a power's intro level (extra.intro) is gentle on purpose: they teach the ideas, so they are not part of the ramp
-    for (let i = 1; i < ls.length; i++) {
-      ok(ls[i].bpm >= ls[i - 1].bpm, `${ls[i].name} (${ls[i].bpm} BPM) is slower than ${ls[i - 1].name} (${ls[i - 1].bpm})`);
-      ok(ls[i].stars >= ls[i - 1].stars, `${ls[i].name} has fewer stars than ${ls[i - 1].name}`);
-      ok(P[i] >= P[i - 1] + .1, `${ls[i].name} (pressure ${P[i].toFixed(2)}) is not clearly harder than ${ls[i - 1].name} (${P[i - 1].toFixed(2)})`);
-    }
-    const steps = P.slice(1).map((p, i) => p - P[i]), avg = (P[P.length - 1] - P[0]) / steps.length;
-    ok(P[P.length - 1] >= 2.5 * P[0], `the last level is only ${(P[P.length - 1] / P[0]).toFixed(1)}x the first (want 2.5x)`);
-    ok(Math.max(...steps) <= 2 * avg, `no cliff: the biggest step (${Math.max(...steps).toFixed(2)}) is over twice the average (${avg.toFixed(2)})`);
-    const q = ls[ls.length - 1]; ok(q.name === 'Royal Jelly' && P[P.length - 1] === Math.max(...P), 'the last level is the boss, Royal Jelly, and the hardest');
-    ok(ls[ls.length - 2].name === 'Slime Queen' && st[st.length - 2].secs === Math.max(...st.map(s => s.secs)), 'Slime Queen leads up to it, and is the longest (a boss is short and dense: its hearts take the solver far longer to prove than its length suggests)');
+    J.buildLevel(J.OFFICIAL[0]);
   });
-
+  test('difficulty ramp: every world ends harder than the one before, and the hardest level of the game is the last boss, Royal Jelly, or later', () => {
+    const bosses = J.WORLDS.map((_, w) => { const ls = rampOf(w); return ls.length ? { l: ls[ls.length - 1], P: pressureOf(ls[ls.length - 1]).P } : null; }).filter(Boolean);
+    for (let i = 1; i < bosses.length; i++) { ok(bosses[i].P >= bosses[i - 1].P + .1, `boss ${bosses[i].l.name} (${bosses[i].P.toFixed(2)}) is not harder than ${bosses[i - 1].l.name} (${bosses[i - 1].P.toFixed(2)})`); ok(bosses[i].l.stars >= bosses[i - 1].l.stars, `boss ${bosses[i].l.name} has fewer stars than ${bosses[i - 1].l.name}`); }
+    const all = J.OFFICIAL.filter(l => !l.intro && !l.tutorial).map(l => pressureOf(l).P); J.buildLevel(J.OFFICIAL[0]);
+    ok(Math.max(...all) >= 2.5 * Math.min(...all), `the hardest level is only ${(Math.max(...all) / Math.min(...all)).toFixed(1)}x the easiest (want 2.5x)`); ok(Math.max(...all) === bosses[bosses.length - 1].P, 'the last boss is the hardest level of the game');
+    ok(rampOf(4).length && rampOf(4)[rampOf(4).length - 1].name === 'Royal Jelly' || J.WORLDS.length > 5, 'Royal Jelly is the boss of the Slime Palace');
+  });
+  /* ---------- level packs ---------- */
+  test('level packs: makePackLevel builds a pack entry, drops its unreachable hearts, and a pack world takes part in everything a built-in world does', () => {
+    const d = { id: 'ptest', w: 0, n: 'Test Path', st: 2, sc: 's2 g3 ss212', bpm: 104, sty: 3, coy: .06, drop: [] }, base = J.makePackLevel(d), hs = base.objs.filter(o => o.t === 'heart'); ok(hs.length >= 4, 'it has hearts');
+    const gone = J.makePackLevel(Object.assign({}, d, { drop: [[hs[0].x, hs[0].y]] })); eq(gone.objs.filter(o => o.t === 'heart').length, hs.length - 1, 'a drop entry removes exactly that heart');
+    eq([base.world, base.style, base.pal, base.stars, base.name], [0, 3, J.WORLDS[0].pal, 2, 'Test Path'], 'world, song style, palette, stars and name come from the entry'); ok(base.script === 's2 g3 ss212', 'the script is kept for the ramp test');
+    const p = J.makePackLevel({ id: 'ppuff', w: 0, n: 'P', st: 3, sc: 'pg7 ss321', bpm: 110, sty: 1, x: { puff: true, bounce: true } }); ok(p.puff && p.bounce, 'power flags come through x');
+    // a pack world: select screen, progress counts, rewards, the song, save and the level code all work for a level in a world that is not one of the five built in
+    const W = J.WORLDS, n0 = W.length, O = J.OFFICIAL, o0 = O.length;
+    for (let i = 0; i < 4; i++) W.push({ id: 'tw' + i, name: 'Test World ' + i, tag: 'a test', pal: [i % 8, 1, 2], amb: 'meadow' });
+    const mine = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => { const L = J.makePackLevel({ id: 'pt' + i, w: n0 + (i < 5 ? 0 : 3), n: 'Pack ' + i, st: 1 + (i % 5), sc: 's2 g3 ss212', bpm: 100 + i, sty: i % J.SONG_N, coy: .06 }); O.push(L); return L; });
+    try {
+      for (const L of mine) { ok(rewardScale(L) >= 1 && rewardFor(L).first >= REWARD.first, 'a pack level pays'); eq(J.parseLevelCode(J.levelCode(L)).objs.length, L.objs.length, 'share code'); }
+      ok(rewardScale(mine[4]) > rewardScale(mine[0]), 'more stars pay more');
+      const st = J.getStore(), keep = JSON.stringify(st.best); try {
+        st.best = {}; for (const L of O) if (!mine.slice(5).includes(L)) st.best[L.id] = 100; J.setState('select'); selWorld = -1; selTab = 0; pickFor = 'play'; selKey = ''; J.draw();
+        eq(currentWorld(), n0 + 3, 'the select screen opens the first world with something left to beat (here the second pack world)'); eq([worldDone(n0), worldTotal(n0)], [5, 5], 'progress per world counts pack levels');
+        eq(nextLevel().id, 'pt5', 'Continue goes to the first unbeaten level, in a pack world'); for (const w of [n0, n0 + 3]) { selWorld = w; selKey = ''; J.draw(); }
+        for (let w = 0; w < W.length; w++) { selWorld = w; selKey = ''; J.draw(); }   // every world draws, whichever chips are showing
+      } finally { st.best = JSON.parse(keep); }
+    } finally { O.length = o0; W.length = n0; selWorld = -1; selKey = ''; J.setState('title'); J.buildLevel(O[0]); }
+  });
+  test('level select: a world with many levels pages two rows at a time, opens on the page that holds the next level, and the world chips scroll', () => {
+    const W = J.WORLDS, n0 = W.length, O = J.OFFICIAL, o0 = O.length, st = J.getStore(), keep = JSON.stringify(st.best);
+    for (let i = 0; i < 3; i++) W.push({ id: 'tw' + i, name: 'Test World ' + i, tag: 'a test', pal: [i, 1, 2], amb: 'meadow' });
+    const mine = Array.from({ length: 21 }, (_, i) => { const L = J.makePackLevel({ id: 'pq' + i, w: n0, n: 'Page ' + i, st: 1 + Math.floor(i / 5), sc: 's2 g3 ss212', bpm: 100 + i, sty: 0, coy: .06 }); O.push(L); return L; });
+    try {
+      st.best = {}; for (const L of O) if (L.world !== n0) st.best[L.id] = 100; for (const L of mine.slice(0, 11)) st.best[L.id] = 100;   // level 12 of 21 is next: the second page of eight
+      J.setState('select'); selTab = 0; pickFor = 'play'; selWorld = -1; selKey = ''; selPage = 0; worldSeen = -1; worldOff = 0; J.draw();
+      eq(currentWorld(), n0, 'opens the unfinished pack world'); eq(nextLevel().id, 'pq11'); eq(selPage, 1, 'and its second page (levels 9-16)');
+      ok(J.getUi().length > 5, 'buttons are registered');
+      const bt = J.getUi().filter(u => u.y >= 230 && u.y < 470 && u.h > 90); ok(bt.length === 8, 'a page shows eight level cards, got ' + bt.length); ok(bt.every(u => u.y + u.h <= 476), 'and they fit above the page buttons');
+      selWorld = 0; selKey = ''; J.draw(); eq(selPage, 0, 'a world without the next level opens on its first page');
+      const chips = J.getUi().filter(u => u.y === 116 && u.w > 100); ok(chips.length === 4 && chips.every(u => u.x >= 50 && u.x + u.w <= 910), 'with more than five worlds, four chips show between the arrows (' + chips.length + ')');
+      selWorld = n0 + 2; selKey = ''; J.draw(); ok(worldOff >= 2, 'choosing the last world scrolls the chip row to it (' + worldOff + ')');
+    } finally { st.best = JSON.parse(keep); O.length = o0; W.length = n0; selWorld = -1; selKey = ''; worldSeen = -1; worldOff = 0; J.setState('title'); J.buildLevel(O[0]); }
+  });
+  test('proof key: changes with the level data and the pace, not with names or colours', () => {
+    const L = J.OFFICIAL[3], k = window.proofKey(L, 1); eq(window.proofKey(L, 1), k, 'stable'); ok(window.proofKey(L, .85) !== k, 'pace'); ok(window.proofKey(Object.assign({}, L, { name: 'x', pal: [5, 5, 5], style: 3, stars: 5 }), 1) === k, 'cosmetics do not count');
+    ok(window.proofKey(Object.assign({}, L, { coy: L.coy + .01 }), 1) !== k, 'coyote time counts'); ok(window.proofKey(Object.assign({}, L, { objs: L.objs.slice(1) }), 1) !== k, 'objects count'); ok(window.proofKey(Object.assign({}, L, { puff: !L.puff }), 1) !== k, 'power flags count');
+  });
+  /* ---------- the melody ---------- */
+  test('melody: every style plays a hook (repeating rhythm and contour), stepwise, within an octave and a half, landing on chord tones on the beat', () => {
+    for (let i = 0; i < SONG_N; i++) {
+      const cfg = styleCfg(i); let notes = 0, down = 0, onChord = 0, leaps = 0, moves = 0, same = 0, rep = 0, runs = 0, maxRange = 0;
+      for (const seed of [hashStr(STYLES[i].name), ...[0, 1, 2, 3, 4, 5].map(k => hashStr('Level ' + k + STYLES[i].name))]) {
+        const s = { cfg, seed, mot: {} }, bars = [0, 1, 2, 3, 4, 5, 6, 7].map(b => motif(s, b)); let mn = 999, mx = 0; runs++;
+        bars.forEach((m, b) => { const ch = cfg.prog[b % 4], pcs = new Set(ch[1].map(t => ((cfg.root + ch[0] + t) % 12 + 12) % 12)); let prev = null;
+          m.forEach((n, k) => { if (!n) return; notes++; mn = Math.min(mn, n); mx = Math.max(mx, n); if (k % 4 === 0) { down++; if (pcs.has(n % 12)) onChord++; } if (prev !== null) { moves++; if (Math.abs(n - prev) >= 5) leaps++; } prev = n; }); });
+        maxRange = Math.max(maxRange, mx - mn); const pat = m => m.map(n => n ? 1 : 0).join(''); for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) if (pat(bars[a]) === pat(bars[b])) same++;
+        const seq = bars.flat().filter(Boolean), g = {}; for (let k = 0; k + 3 < seq.length; k++) { const key = seq.slice(k, k + 4).map((x, j, a) => j ? x - a[j - 1] : 0).join(','); g[key] = (g[key] || 0) + 1; } for (const k in g) if (g[k] > 1) rep += g[k] - 1;
+        for (const m of bars) ok(m.filter(Boolean).length >= 2, cfg.name + ': a bar of the melody has fewer than two notes');
+      }
+      const nm = cfg.name; eq(onChord, down, nm + ': every note on the beat is a chord tone'); ok(leaps / moves <= .25, nm + ': ' + Math.round(100 * leaps / moves) + '% of the moves are leaps (want at most 25%)'); ok(maxRange <= 17, nm + ': the melody spans ' + maxRange + ' semitones (want at most 17: about an octave and a half, section B lifted a step)');
+      ok(same / runs >= 5, nm + ': only ' + (same / runs).toFixed(1) + ' of 28 bar pairs share a rhythm (the hook must come back)'); ok(rep / runs >= .8, nm + ': melodic shapes hardly repeat (' + (rep / runs).toFixed(1) + ')'); ok(notes / runs / 8 >= 2.4 && notes / runs / 8 <= 5.2, nm + ': ' + (notes / runs / 8).toFixed(1) + ' notes a bar');
+    }
+  });
   /* ---------- runner ---------- */
   (async () => {
     const out = document.getElementById('out'), sum = document.getElementById('sum'); let pass = 0, fail = 0;

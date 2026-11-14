@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Jelly Dash level generator</title>
+<style>
+  :root{color-scheme:light dark}
+  body{margin:0;font:14px/1.5 system-ui,sans-serif;padding:16px 16px 48px;background:#fdf3fa;color:#3a1340}
+  @media (prefers-color-scheme:dark){body{background:#24102a;color:#f6e4f4}}
+  h1{font-size:20px;margin:0 0 4px} textarea{width:100%;box-sizing:border-box;font:12px/1.4 ui-monospace,monospace} button{font:inherit;padding:6px 16px;margin:4px 6px 4px 0}
+  #log{height:200px;overflow:auto;white-space:pre-wrap;border:1px solid rgba(160,80,160,.3);padding:6px;font:12px/1.4 ui-monospace,monospace}
+  #sa{position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;right:0;bottom:0}
+  canvas{position:fixed;display:block;opacity:0;pointer-events:none}
+</style>
+<h1>Jelly Dash — level generator</h1>
+<small>Fill in a world spec (see the comment at the top of tests/gen.js), press Generate, then paste the output into <code>PACKS</code> in js/packs.js (and the world into <code>PACK_WORLDS</code>). Then open tests.html?full to prove them, and save <code>window.__proofsOut</code> as tests/proofs.json.</small>
+<textarea id="spec" rows="12">{ "w": 5, "idStart": 1, "count": 3, "bpm": [104, 114], "P": [2.4, 3.6], "tiles": [150, 260], "powers": ["squish"], "styles": [0, 1, 2, 3], "seed": 1, "tries": 400, "names": ["Gumdrop Glen", "Taffy Trail", "Lollipop Loop"] }</textarea>
+<button id="go">Generate</button><button id="stop">Stop</button>
+<div id="log"></div>
+<h3>Output</h3><textarea id="out" rows="10" readonly></textarea>
+<div id="sa"></div><canvas id="c"></canvas><div id="dlg" style="display:none"><div class="card"></div></div>
+<script>window.JD_TEST = true;</script>
+<script src="../js/core.js"></script><script src="../js/save.js"></script><script src="../js/dom.js"></script><script src="../js/themes.js"></script><script src="../js/packs.js"></script><script src="../js/levels.js"></script><script src="../js/audio.js"></script><script src="../js/music.js"></script><script src="../js/tunes.js"></script>
+<script src="../js/softbody.js"></script><script src="../js/game.js"></script><script src="../js/room.js"></script><script src="../js/solver.js"></script><script src="../js/editor.js"></script>
+<script src="../js/update.js"></script><script src="../js/render.js"></script><script src="../js/ui.js"></script><script src="../js/input.js"></script><script src="../js/main.js"></script>
+<script src="pressure.js"></script><script src="gen.js"></script>
+</body></html>
