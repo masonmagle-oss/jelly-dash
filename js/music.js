@@ -115,7 +115,9 @@ function songStart(L, atT = 0) {
     dly.delayTime.value = sixT * beats; fb.gain.value = .32; wet.gain.value = .3; pn.pan.value = pan;
     fx.connect(dly); dly.connect(fb); fb.connect(dly); dly.connect(wet); wet.connect(pn); pn.connect(bus); fxNodes.push(dly, fb, wet, pn);
   }
-  song = { eq: [hp, ls, hs], fx, fxNodes, comp, mk, cfg, bpm, step: Math.max(0, Math.ceil(atT / (60 / bpm / 4) - 1e-6)), walk: 4, seed: hashStr(L.id || L.name), bus, send, mot: {},
+  // the climax: in a run's final stretch (the last fifth of the level, the last two fifths of a 5-star boss) the song swells: eighth-note hats, the arpeggio in every bar, the melody doubled an octave up,
+  // the pad chord an octave higher, and on a boss a kick on every beat. Menus and the Studio never climb (their "progress" is not a distance), so their climax point is out of reach.
+  song = { climax: L.menu || L.studio ? 2 : (L.stars >= 5 ? .6 : .8), boss: !L.menu && !L.studio && L.stars >= 5, eq: [hp, ls, hs], fx, fxNodes, comp, mk, cfg, bpm, step: Math.max(0, Math.ceil(atT / (60 / bpm / 4) - 1e-6)), walk: 4, seed: hashStr(L.id || L.name), bus, send, mot: {},
     // which layers are audible at which progress; in Squish Studio "progress" is your kneading flow, so the song is built by your hands
     th: L.studio ? { kick: .25, hat: .12, snare: .4, bass: .3, lead: .5, arp: .62 } : L.menu ? { kick: 0, hat: 0, snare: 0, bass: 0, lead: 0, arp: 0 } : { kick: 0, hat: 0, snare: .1, bass: .06, lead: .18, arp: .3 } };
 }
@@ -162,7 +164,10 @@ function songStep(s, step, at, prog) {
   const sixT = 60 / s.bpm / 4, sec = (bar % 8) >= 4 ? 1 : 0;   // sec: the A / B halves of every 8 bars (B is busier)
   if (i % 2 === 1) at += c.swing * sixT;
   const fillBar = bar % 4 === 3;   // the last bar of every phrase leads into the next one
+  const up = prog > s.climax;   // the final stretch: see songStart
   if (prog >= s.th.kick && d.kick.includes(i)) kit.kick(at, B, 1);
+  else if (up && s.boss && i % 4 === 0) kit.kick(at, B, .7);   // a boss climbs with a kick on every beat
+  if (up && i % 2 === 0 && !d.hat.includes(i)) noiseHit({ f0: kit.hat, f1: kit.hat * .86, q: .8, d: .03, vol: .05, at, bus: B, pan: .35 });
   if (prog > s.th.snare) {
     if (d.snare.includes(i) || (fillBar && c.kit !== 'epic' && (i === 14 || i === 15))) kit.snare(at, B, i >= 14 && fillBar ? .7 : 1);
     if (d.clap.includes(i)) for (let k = 0; k < 3; k++) noiseHit({ f0: 1900, f1: 1300, q: 1, d: .03, vol: .07, at: at + k * .011, bus: B });
@@ -179,19 +184,21 @@ function songStep(s, step, at, prog) {
     const bs = c.bass.steps, k = bs.findIndex(x => (Array.isArray(x) ? x[0] : x) === i);
     if (k >= 0) { const iv = Array.isArray(bs[k]) ? bs[k][1] : (c.bass.voice === 'saw' && k % 3 === 2 ? 7 : 0); (VOICES[c.bass.voice] || VOICES.sub)(mf(root + (c.bass.oct || -12) + iv), .32, (c.bass.vol || .1) * .55, at, B); }
   }
-  if (i === 0) ch[1].forEach(n => (VOICES[c.pad.voice] || VOICES.pad)(mf(root + n), 3.4, c.pad.vol, at, B));
-  if (c.arp && prog > s.th.arp && (sec === 1 || c.arp.always)) {
+  if (i === 0) { ch[1].forEach(n => (VOICES[c.pad.voice] || VOICES.pad)(mf(root + n), 3.4, c.pad.vol, at, B)); if (up) ch[1].slice(0, 3).forEach(n => (VOICES[c.pad.voice] || VOICES.pad)(mf(root + n + 12), 3.4, c.pad.vol * .9, at, B)); }
+  if (c.arp && prog > s.th.arp && (sec === 1 || c.arp.always || up)) {
     const a = c.arp.pattern[i]; if (a >= 0) (VOICES[c.arp.voice] || VOICES.pluck)(mf(root + c.arp.oct + ch[1][a % ch[1].length]), .32, c.arp.vol * 1.7, at, 'songfx', (step % 2 ? .4 : -.4));
   }
+  if (up && !c.arp && i % 2 === 0) VOICES.bell(mf(root + 12 + ch[1][(i / 2) % ch[1].length]), .3, .035, at, 'songfx', (i % 4 ? .4 : -.4));   // a style with no arpeggio of its own gets a sparkle of bells climbing the chord
   if (prog > s.th.lead) {   // the melody is doubled: one copy left, one slightly detuned and a hair late on the right, which makes it wide
     const m = motif(s, bar % 4 + (sec ? 4 : 0))[i];
-    if (m) { const lv = VOICES[c.lead.voice] || VOICES.tri, f = mf(m + (c.lead.oct || 0)), v = (c.lead.vol || .03) * 1.2; lv(f, .75, v, at, 'songfx', -.45); lv(f * 1.0035, .75, v, at + .011, 'songfx', .45); }
+    if (m) { const lv = VOICES[c.lead.voice] || VOICES.tri, f = mf(m + (c.lead.oct || 0)), v = (c.lead.vol || .03) * 1.2; lv(f, .75, v, at, 'songfx', -.45); lv(f * 1.0035, .75, v, at + .011, 'songfx', .45); if (up) lv(f * 2, .6, v * .7, at + .006, 'songfx', 0); }
   }
   if (bar % 8 === 7 && i === 8 && prog >= s.th.hat) noiseHit({ f0: 700, f1: 7000, q: .8, d: sixT * 8, vol: .022, at, bus: B, pan: -.2 });   // a riser into the next 8-bar section
   if (i === 0 && bar % 4 === 0 && prog > s.th.lead) VOICES.bell(mf(root + 36 + (ch[1][2] || 7)), 1.2, .008, at, B, bar % 8 ? -.3 : .3);   // a little glitter on the first beat of a phrase
 }
 function songUpdate(prog) {
   if (!song || !AC) return;
+  const lift = prog > song.climax; if (lift !== !!song.lifted) { song.lifted = lift; song.mk.gain.setTargetAtTime((song.cfg.makeup || .75) * (lift ? 1.15 : 1), nowT(), .4); }   // the climax also lifts the whole song by about 1.2 dB (a dense style gains nothing from extra layers, since the compressor holds its level); it settles back if a respawn takes you out of it
   const six = 60 / song.bpm / 4;
   while (song.step * six < songT + .22) { songStep(song, song.step, Math.max(0, song.step * six - songT), prog); song.step++; }
 }
