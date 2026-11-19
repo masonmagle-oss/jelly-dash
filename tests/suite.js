@@ -683,6 +683,23 @@
     ok(base.dip > .02, 'the test tone is audible (' + base.dip.toFixed(3) + ')'); ok(Math.abs(ducked.dip / base.dip - .5) < .08, 'the music dips to about the duck gain: ' + (ducked.dip / base.dip).toFixed(2) + ' of normal (want .5)');
     ok(ducked.after / base.after > .97, 'and swells back: ' + (ducked.after / base.after).toFixed(2) + ' of normal after 1.6 s');
   });
+  /* ---------- the climax ---------- */
+  test('song climax: the final stretch of every style swells (a boss earlier and harder); menus and the Studio never climb; nothing clips', async () => {
+    const stat = b => { const d = b.getChannelData(0); let s = 0, h = 0; for (let i = 1; i < d.length; i++) { s += d[i] * d[i]; const x = d[i] - d[i - 1]; h += x * x; } return { rms: Math.sqrt(s / d.length), bright: Math.sqrt(h / d.length) }; };   // bright: the first difference, which favours the top of the spectrum
+    const peak = b => { let p = 0; for (const c of [0, 1]) { const d = b.getChannelData(c); for (let i = 0; i < d.length; i++) p = Math.max(p, Math.abs(d[i])); } return p; };
+    const mk = (style, n, extra) => Object.assign({ id: 'c' + style + n, name: 'c', style, bpm: J.STYLES[style].bpm, stars: n }, extra), at = (style, stars, prog, extra) => J.renderSongOffline(mk(style, stars, extra), 12, prog);
+    for (let style = 0; style < SONG_N; style++) {
+      const nm = J.STYLES[style].name, bufL = await at(style, 3, .95), e = stat(await at(style, 3, .5)), l = stat(bufL);
+      ok(l.rms / e.rms >= 1.04 && l.rms / e.rms < 1.9, nm + ': the last stretch is ' + (l.rms / e.rms).toFixed(2) + 'x the early level (want a clear but gentle swell)'); ok(l.bright / e.bright >= 1.04, nm + ': and it is brighter: ' + (l.bright / e.bright).toFixed(2) + 'x'); ok(peak(bufL) < .99, nm + ': the climax stays under the limiter');
+    }
+    for (const style of [1, 8]) {
+      const nm = J.STYLES[style].name, boss = stat(await at(style, 5, .7)), plain = stat(await at(style, 3, .7)); ok(boss.rms / plain.rms >= 1.04, nm + ': a boss is already climbing at 70% (' + (boss.rms / plain.rms).toFixed(2) + 'x an ordinary level)');
+      // the song's own settings (a render of two songs differs by noise, so the settings are checked directly): a run climbs at 80% (a boss at 60%), a menu or the Studio never does
+      const cfgOf = L => withAudioContext(new OfflineAudioContext(2, 22050, 22050), async () => { audioOpen = true; songStart(L, 0); const s = song; audioOpen = false; return { climax: s.climax, boss: s.boss }; });
+      eq(await cfgOf(mk(style, 3)), { climax: .8, boss: false }, nm + ': an ordinary level climbs in its last fifth'); eq(await cfgOf(mk(style, 5)), { climax: .6, boss: true }, nm + ': a boss climbs in its last two fifths');
+      ok((await cfgOf(mk(style, 5, { menu: true }))).climax > 1 && !(await cfgOf(mk(style, 5, { menu: true }))).boss, nm + ': a menu song never climbs'); ok((await cfgOf(mk(style, 5, { studio: true }))).climax > 1 && !(await cfgOf(mk(style, 5, { studio: true }))).boss, nm + ': the Studio song never climbs');
+    }
+  }, { slow: true });
   /* ---------- the melody ---------- */
   test('melody: every style plays a hook (repeating rhythm and contour), stepwise, within an octave and a half, landing on chord tones on the beat', () => {
     for (let i = 0; i < SONG_N; i++) {
