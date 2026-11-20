@@ -384,19 +384,21 @@ function drawSoft(s, scroll, o = {}) {
   ctx.beginPath(); ctx.arc(w * .17, h * .1, 1.8 * k, 0, 7); ctx.fill(); ctx.restore();
   ctx.restore(); ctx.save(); squash();   // face: squashed with the body but never rotated
   const sxF = clamp(w / (2 * R * .98), .55, 1.5) * k, syF = clamp(h / (2 * R * .86), .55, 1.5) * k, dark = C.ink;
-  ctx.save(); ctx.translate(cx, cy + h * .02); ctx.rotate(th); ctx.scale(sxF, syF);
+  ctx.save(); if (o.frot) { ctx.translate(cx, bb.cy); ctx.rotate(o.frot); ctx.translate(-cx, -bb.cy); }   // o.frot: the face turns with the body (and :O when upside down, :/ when smushed: o.inv, o.meh)
+  ctx.translate(cx, cy + h * .02); ctx.rotate(th); ctx.scale(sxF, syF);
   const blink = (tg % 3.4) < .13 ? .1 : 1, squint = o.squint || (h / w < .62);
   for (const sg of [-1, 1]) {
     const ex = sg * 9.5, ey = -2;
     if (o.happy || squint) { ctx.strokeStyle = dark; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.beginPath(); if (squint && !o.happy) { ctx.moveTo(ex - sg * 4, ey - 3); ctx.lineTo(ex + sg * 3, ey); ctx.lineTo(ex - sg * 4, ey + 3); } else ctx.arc(ex, ey + 3, 5, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
     else {
-      ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(ex, ey, 4.8, 6.5 * blink, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(ex, ey, o.inv ? 5.6 : 4.8, (o.inv ? 7.6 : 6.5) * blink, 0, 0, 7); ctx.fill();
       if (blink > .5) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 1.5, ey - 2.5, 1.9, 0, 7); ctx.arc(ex + 1.6, ey + 2, 1, 0, 7); ctx.fill(); }
     }
     ctx.fillStyle = 'rgba(255,50,140,.45)'; ctx.beginPath(); ctx.ellipse(sg * 16, 6, 4.4, 2.8, 0, 0, 7); ctx.fill();
   }
   ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.lineCap = 'round';
-  if (o.open) { ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(0, 7, 2.8, 3.4, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#ff7ab0'; ctx.beginPath(); ctx.ellipse(0, 8.6, 1.7, 1.3, 0, 0, 7); ctx.fill(); }
+  if (o.meh && !o.happy && !o.inv) { ctx.beginPath(); ctx.moveTo(-4.2, 6.2); ctx.lineTo(4.2, 4.2); ctx.stroke(); }   // :/
+  else if (o.open || o.inv) { ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(0, 7, 2.8, 3.4, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#ff7ab0'; ctx.beginPath(); ctx.ellipse(0, 8.6, 1.7, 1.3, 0, 0, 7); ctx.fill(); }
   else { ctx.beginPath(); ctx.arc(0, 3.5, o.happy ? 5 : 3.6, .12 * Math.PI, .88 * Math.PI); ctx.stroke(); }
   ctx.restore();
   ctx.save(); spin(); squash();   // the bow rides on the spinning body

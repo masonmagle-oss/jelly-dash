@@ -40,8 +40,10 @@ function genLevel(id, name, stars, pal, script, bpm = BASE_BPM, style = 0, auto 
       for (const dx of [3, 4]) for (const j of [0, 1]) add({ t: 'block', x: x + dx, y: j });
       arc(x, x + 1, 2.4, 2); arc(x + 3, x + 4, 3.4, 2); x += 10;
     },
-    pad: () => { add({ t: 'pad', x, y: 0 }); for (let i = 1; i <= 4; i++) add({ t: 'spike', x: x + i, y: 0 }); arc(x + 1, x + 5, 5.0, 5); x += 12; },
-    padh: () => { add({ t: 'pad', x, y: 0 }); for (let i = 2; i <= 3; i++) add({ t: 'spike', x: x + i, y: 0 }); arc(x + 1, x + 4, 4.4, 4); x += 9; },   // a gentle pad: two spikes behind it (the pad is the teacher here, not the test)
+    // pad hearts sit on the real flight of a pad launch from a running start (measured: 4.04, 4.84, 4.46, 2.89 tiles up at 1..4 tiles past the pad, at every tempo), so the whole row can be taken without a late jump onto the pad
+    padRow: () => { for (let ox = 1; ox <= 4; ox++) { const d = ox - 2; add({ t: 'heart', x: x + ox, y: Math.round((4.84 + .21 * d - .59 * d * d) * 100) / 100 }); } },
+    pad: () => { add({ t: 'pad', x, y: 0 }); for (let i = 1; i <= 4; i++) add({ t: 'spike', x: x + i, y: 0 }); C.padRow(); x += 12; },
+    padh: () => { add({ t: 'pad', x, y: 0 }); for (let i = 2; i <= 3; i++) add({ t: 'spike', x: x + i, y: 0 }); C.padRow(); x += 9; },   // a gentle pad: two spikes behind it (the pad is the teacher here, not the test)   // a gentle pad: two spikes behind it (the pad is the teacher here, not the test)
     bsp: () => { for (let i = 0; i < 4; i++) add({ t: 'block', x: x + i, y: 0 }); add({ t: 'spike', x: x + 2, y: 1 }); arc(x, x + 3, 2.4, 4); x += 9; },
     rest: () => { arc(x, x + 6, 2.2, 4); x += 8; },
     // orb patterns: a hazard too wide for one jump, with an orb over its middle for the second
@@ -142,11 +144,14 @@ moveBefore('o12', 'Sugar Rush'); moveBefore('o13', 'Heartbreaker'); moveBefore('
    [x, y] in level units. The test suite re-runs the search,
    so if a level script or the jump physics change, it fails until this list is regenerated (each level's `missed` list from heartsSync). */
 const UNREACHABLE_HEARTS = {
-  'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1]], 'Sugar Rush': [[157, 3.6]], 'Bubble Tea': [[101, 3.6]],
-  'Sparkle Storm': [[97, 2.2], [119, 1], [99, 2.2]], 'Orbital': [[82, 3.8], [254, 2.2]], 'Moonlit Mochi': [[178, 2.2]], 'Slime Queen': [[546, 2.2]],
+  'Candy Steps': [[99, 1]], 'Jelly Bounce': [[111, 1], [136.667, 2.2]], 'Sugar Rush': [[157, 3.6], [76.667, 2.2], [191, 1.2]], 'Bubble Tea': [[101, 3.6], [91, 1.2]],
+  'Gap Year': [[124.667, 2.2]], 'Heartbreaker': [[328.667, 2.2]],   // (the later ones: hearts a plain jump-timing sweep almost never collected, because they sit between the two jumps of a hop-chain where the jelly is on the ground)
+  'Sparkle Storm': [[97, 2.2], [119, 1], [99, 2.2], [144.667, 2.2]], 'Orbital': [[82, 3.8], [254, 2.2]], 'Moonlit Mochi': [[178, 2.2]], 'Slime Queen': [[546, 2.2]],
   'Sprinkle Path': [[75, 1]], 'Lullaby Lane': [[39, 4], [113.5, 4.9], [37.5, 4.9], [81, 4.9]],
   'Boing Bay': [[54, 1.4], [68, .8]], 'Bounce House': [[22, 1.4], [69.5, 4.9], [86, 1.4], [93, 4.9], [60.333, 2.2]],
 };
+const HEART_MOVE = { 'Sugar Rush': [[79, 1.4, 2.3]], 'Sparkle Storm': [[147, 1.4, 2.3]], 'Heartbreaker': [[331, 1.4, 2.3]] };   // [x, y, new y]: the second jump's apex of a hop-chain is ~2.3 rows up, so the heart that sat at 1.4 (collected by only a quarter of natural jump timings) rides there
+for (const L of OFFICIAL) { for (const [x, y, ny] of HEART_MOVE[L.name] || []) { const h = L.objs.find(o => o.t === 'heart' && Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002); if (h) h.y = ny; } }
 for (const L of OFFICIAL) { const drop = UNREACHABLE_HEARTS[L.name]; if (drop) L.objs = L.objs.filter(o => o.t !== 'heart' || !drop.some(([x, y]) => Math.abs(o.x - x) < .002 && Math.abs(o.y - y) < .002)); }
 /* ---------- worlds ----------
    Every official level belongs to a world; a world sets the palette, the song and the ambience. Levels run in order, so each world is a contiguous stretch. */
