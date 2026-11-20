@@ -210,7 +210,7 @@
     };
     const e = await bounce(bb, 'early'), l = await bounce(bb, 'late'), n = await bounce(fh, 'early');
     ok(e.v2 / e.v1 > BOUNCE_K - .03 && e.v2 / e.v1 < BOUNCE_K + .03, 'an early tap springs up ' + (e.v2 / e.v1).toFixed(2) + 'x'); ok(e.apex > 1.6 * (e.v1 * e.v1 / (2 * e.g)) * .95, 'about 1.7x as high (' + Math.round(e.apex) + ' px)');
-    ok(Math.abs(l.v2 / l.v1 - 1) < .03, 'a tap after landing is an ordinary hop'); ok(Math.abs(n.v2 / n.v1 - 1) < .03, 'no bounce in a level without it');
+    ok(Math.abs(l.v2 / l.v1 - 1) < .03, 'a tap after landing is an ordinary hop'); ok(Math.abs(n.v2 / n.v1 - 1) < .03, 'no bounce in a level without it (v1 ' + n.v1.toFixed(1) + ', v2 ' + n.v2.toFixed(1) + ')');
     J.resetRun();
   });
   test('tunes: every world has a public-domain tune that fits every song style and sounds', async () => {
